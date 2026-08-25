@@ -82,6 +82,45 @@ fn checks_config_suppression_json_and_exit_status() {
 }
 
 #[test]
+fn checks_explicit_private_inputs_selection_and_suppression() {
+    let directory = create_temp_directory("explicit-private-inputs");
+    fs::write(
+        directory.join("pyproject.toml"),
+        "[tool.ruffhouse.lint]\nselect = [\"RH002\"]\n",
+    )
+    .expect("test configuration should be written");
+    fs::write(
+        directory.join("finding.py"),
+        "def _render(path):\n    ...\n",
+    )
+    .expect("finding source should be written");
+    fs::write(
+        directory.join("suppressed.pyi"),
+        "def _load(path): ...  # noqa: RH002\n",
+    )
+    .expect("suppressed source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
+        .args(["check", "--output-format", "json", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("ruffhouse should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 1);
+    assert_eq!(findings[0]["code"], "RH002");
+    assert_eq!(findings[0]["name"], "explicit-private-inputs");
+    assert_eq!(
+        findings[0]["message"],
+        "Private definition `_render` must receive required keyword-only inputs."
+    );
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn follows_ruff_selector_specificity() {
     let directory = create_temp_directory("selectors");
     let path = directory.join("finding.py");

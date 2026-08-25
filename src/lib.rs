@@ -44,7 +44,9 @@ use ruff_text_size::TextRange;
 use serde::Deserialize;
 use serde::Serialize;
 
-const RULE_CODE: &str = "RH001";
+const PRIVATE_CALL_WRAPPER_CODE: &str = "RH001";
+const EXPLICIT_PRIVATE_INPUTS_CODE: &str = "RH002";
+const RULE_CODES: &[&str] = &[PRIVATE_CALL_WRAPPER_CODE, EXPLICIT_PRIVATE_INPUTS_CODE];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",
     ".direnv",
@@ -256,20 +258,21 @@ fn run_check(arguments: CheckArguments) -> Result<u8, RunError> {
             explicit_config.as_ref(),
             &mut config_cache,
         )?;
-        let is_enabled = resolve_rule_enabled(&arguments, &config.raw)?;
-        is_rule_enabled_anywhere |= is_enabled;
-
         let mut file_findings = check_file(&path)?;
-        if !is_enabled {
-            file_findings.retain(|finding| finding.code != RULE_CODE);
-        } else if is_ignored_for_file(&path, &config)? {
-            file_findings.retain(|finding| finding.code != RULE_CODE);
+        for code in RULE_CODES {
+            let is_enabled = resolve_rule_enabled(&arguments, &config.raw, code)?;
+            is_rule_enabled_anywhere |= is_enabled;
+            if !is_enabled || is_ignored_for_file(&path, &config, code)? {
+                file_findings.retain(|finding| finding.code != *code);
+            }
         }
         findings.extend(file_findings);
     }
 
     if !has_files {
-        is_rule_enabled_anywhere = resolve_rule_enabled(&arguments, &base_config.raw)?;
+        for code in RULE_CODES {
+            is_rule_enabled_anywhere |= resolve_rule_enabled(&arguments, &base_config.raw, code)?;
+        }
     }
 
     if !is_rule_enabled_anywhere {
@@ -484,31 +487,35 @@ fn load_raw_config(root: PathBuf, raw: RawConfig) -> Result<LoadedConfig, RunErr
     })
 }
 
-fn resolve_rule_enabled(arguments: &CheckArguments, config: &RawConfig) -> Result<bool, RunError> {
+fn resolve_rule_enabled(
+    arguments: &CheckArguments,
+    config: &RawConfig,
+    code: &str,
+) -> Result<bool, RunError> {
     let empty = Vec::new();
     if let Some(selected) = &arguments.select {
         let ignored = arguments.ignore.as_ref().unwrap_or(&empty);
         validate_rules(selected)?;
         validate_rules(ignored)?;
-        return Ok(is_rule_enabled(selected, ignored));
+        return Ok(is_rule_enabled(selected, ignored, code));
     }
 
     let selected = &config.lint.select;
     let ignored = &config.lint.ignore;
     validate_rules(selected)?;
     validate_rules(ignored)?;
-    if !is_rule_enabled(selected, ignored) {
+    if !is_rule_enabled(selected, ignored, code) {
         return Ok(false);
     }
     Ok(arguments
         .ignore
         .as_ref()
-        .is_none_or(|ignored| get_rule_specificity(ignored).is_none()))
+        .is_none_or(|ignored| get_rule_specificity(ignored, code).is_none()))
 }
 
-fn is_rule_enabled(selected: &[String], ignored: &[String]) -> bool {
-    let selected = get_rule_specificity(selected);
-    let ignored = get_rule_specificity(ignored);
+fn is_rule_enabled(selected: &[String], ignored: &[String], code: &str) -> bool {
+    let selected = get_rule_specificity(selected, code);
+    let ignored = get_rule_specificity(ignored, code);
     selected.is_some_and(|selected| ignored.is_none_or(|ignored| selected > ignored))
 }
 
@@ -520,18 +527,19 @@ fn validate_rules(rules: &[String]) -> Result<(), RunError> {
 }
 
 fn is_rule_selector(selector: &str) -> bool {
-    selector == "ALL" || (!selector.is_empty() && RULE_CODE.starts_with(selector))
+    selector == "ALL"
+        || (!selector.is_empty() && RULE_CODES.iter().any(|code| code.starts_with(selector)))
 }
 
-fn get_rule_specificity(selectors: &[String]) -> Option<usize> {
+fn get_rule_specificity(selectors: &[String], code: &str) -> Option<usize> {
     selectors
         .iter()
-        .filter(|selector| is_rule_selector(selector))
+        .filter(|selector| **selector == "ALL" || code.starts_with(selector.as_str()))
         .map(|selector| if selector == "ALL" { 0 } else { selector.len() })
         .max()
 }
 
-fn is_ignored_for_file(path: &Path, config: &LoadedConfig) -> Result<bool, RunError> {
+fn is_ignored_for_file(path: &Path, config: &LoadedConfig, code: &str) -> Result<bool, RunError> {
     if config.per_file_ignores.is_empty() {
         return Ok(false);
     }
@@ -548,7 +556,7 @@ fn is_ignored_for_file(path: &Path, config: &LoadedConfig) -> Result<bool, RunEr
         .unwrap_or(&absolute_path);
 
     for ignore in &config.per_file_ignores {
-        if get_rule_specificity(&ignore.rules).is_none() {
+        if get_rule_specificity(&ignore.rules, code).is_none() {
             continue;
         }
         let is_match = ignore.matcher.is_match(&absolute_path)
@@ -588,6 +596,34 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
     };
     let mut findings = Vec::new();
 
+    for (definition, is_method) in find_private_definitions(parsed.suite()) {
+        let name = definition.name.as_str();
+        if !is_private_definition(name) || !has_implicit_private_inputs(definition, is_method) {
+            continue;
+        }
+
+        let definition_range = definition.name.range;
+        let noqa_row = find_noqa_row(source, parsed.tokens(), definition_range);
+        if has_noqa(
+            source,
+            parsed.tokens(),
+            noqa_row,
+            EXPLICIT_PRIVATE_INPUTS_CODE,
+        ) {
+            continue;
+        }
+
+        findings.push(make_finding(
+            path,
+            EXPLICIT_PRIVATE_INPUTS_CODE,
+            format!("Private definition `{name}` must receive required keyword-only inputs."),
+            definition_range,
+            source,
+            None,
+            Some(noqa_row),
+        ));
+    }
+
     for statement in parsed.suite() {
         let Stmt::FunctionDef(definition) = statement else {
             continue;
@@ -618,13 +654,13 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
 
         let definition_range = definition.name.range;
         let noqa_row = find_noqa_row(source, parsed.tokens(), definition_range);
-        if has_noqa(source, parsed.tokens(), noqa_row, RULE_CODE) {
+        if has_noqa(source, parsed.tokens(), noqa_row, PRIVATE_CALL_WRAPPER_CODE) {
             continue;
         }
 
         findings.push(make_finding(
             path,
-            RULE_CODE,
+            PRIVATE_CALL_WRAPPER_CODE,
             format!("Private call wrapper `{name}` has one caller; inline it"),
             definition_range,
             source,
@@ -634,6 +670,70 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
     }
 
     findings
+}
+
+fn is_private_definition(name: &str) -> bool {
+    name.starts_with('_') && !name.starts_with("__") && !name.ends_with('_')
+}
+
+fn has_implicit_private_inputs(definition: &StmtFunctionDef, is_method: bool) -> bool {
+    let positional_count =
+        definition.parameters.posonlyargs.len() + definition.parameters.args.len();
+    let receiver_count =
+        usize::from(is_method && !is_static_method(definition) && positional_count > 0);
+    positional_count > receiver_count
+        || definition
+            .parameters
+            .kwonlyargs
+            .iter()
+            .any(|parameter| parameter.default.is_some())
+}
+
+fn is_static_method(definition: &StmtFunctionDef) -> bool {
+    definition.decorator_list.iter().any(
+        |decorator| matches!(&decorator.expression, Expr::Name(name) if name.id == "staticmethod"),
+    )
+}
+
+#[derive(Clone, Copy)]
+enum DefinitionScope {
+    Module,
+    Class,
+    Function,
+}
+
+fn find_private_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
+    let mut visitor = PrivateDefinitionVisitor {
+        scope: DefinitionScope::Module,
+        definitions: Vec::new(),
+    };
+    visitor.visit_body(statements);
+    visitor.definitions
+}
+
+struct PrivateDefinitionVisitor<'a> {
+    scope: DefinitionScope,
+    definitions: Vec<(&'a StmtFunctionDef, bool)>,
+}
+
+impl<'a> Visitor<'a> for PrivateDefinitionVisitor<'a> {
+    fn visit_stmt(&mut self, statement: &'a Stmt) {
+        let previous_scope = self.scope;
+        match statement {
+            Stmt::FunctionDef(definition) => {
+                match previous_scope {
+                    DefinitionScope::Module => self.definitions.push((definition, false)),
+                    DefinitionScope::Class => self.definitions.push((definition, true)),
+                    DefinitionScope::Function => {}
+                }
+                self.scope = DefinitionScope::Function;
+            }
+            Stmt::ClassDef(_) => self.scope = DefinitionScope::Class,
+            _ => {}
+        }
+        walk_stmt(self, statement);
+        self.scope = previous_scope;
+    }
 }
 
 fn is_private_call_wrapper(definition: &StmtFunctionDef) -> bool {
@@ -2082,10 +2182,10 @@ fn print_json(writer: &mut impl Write, findings: &[Finding]) -> io::Result<()> {
 }
 
 fn get_finding_name(code: &str) -> &str {
-    if code == RULE_CODE {
-        "private-call-wrapper"
-    } else {
-        "invalid-syntax"
+    match code {
+        PRIVATE_CALL_WRAPPER_CODE => "private-call-wrapper",
+        EXPLICIT_PRIVATE_INPUTS_CODE => "explicit-private-inputs",
+        _ => "invalid-syntax",
     }
 }
 
@@ -2145,6 +2245,85 @@ mod tests {
 
     fn check_source(source: &str) -> Vec<Finding> {
         super::check_source(Path::new("test.py"), source)
+            .into_iter()
+            .filter(|finding| finding.code == PRIVATE_CALL_WRAPPER_CODE)
+            .collect()
+    }
+
+    fn check_explicit_private_inputs(source: &str) -> Vec<Finding> {
+        super::check_source(Path::new("test.py"), source)
+            .into_iter()
+            .filter(|finding| finding.code == EXPLICIT_PRIVATE_INPUTS_CODE)
+            .collect()
+    }
+
+    #[test]
+    fn flags_private_definition_with_positional_input() {
+        let findings = check_explicit_private_inputs("def _render(path):\n    ...\n");
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "RH002");
+        assert_eq!(
+            findings[0].message,
+            "Private definition `_render` must receive required keyword-only inputs."
+        );
+        assert_eq!(findings[0].location.row, 1);
+        assert_eq!(findings[0].location.column, 5);
+    }
+
+    #[test]
+    fn flags_private_method_with_positional_input_after_receiver() {
+        let findings = check_explicit_private_inputs(
+            "class Renderer:\n    def _render(self, path):\n        ...\n",
+        );
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "RH002");
+        assert_eq!(findings[0].location.row, 2);
+        assert_eq!(findings[0].location.column, 9);
+    }
+
+    #[test]
+    fn checks_explicit_private_input_signature_shapes() {
+        let violations = [
+            "def _load(path, /):\n    ...\n",
+            "def _load(*, path=None):\n    ...\n",
+            "async def _load(path):\n    ...\n",
+            "def _load(path):\n    yield path\n",
+            "@boundary\ndef _load(path):\n    ...\n",
+            "class Service:\n    @staticmethod\n    def _load(path):\n        ...\n",
+            "class Service:\n    @classmethod\n    def _load(cls, path):\n        ...\n",
+            "class Service:\n    @property\n    def _value(self):\n        ...\n\n    @_value.setter\n    def _value(self, value):\n        ...\n",
+            "def build():\n    class Service:\n        def _load(self, path):\n            ...\n",
+        ];
+        for source in violations {
+            assert_eq!(
+                check_explicit_private_inputs(source).len(),
+                1,
+                "expected RH002 for {source}"
+            );
+        }
+
+        let allowed = [
+            "def load(path):\n    ...\n",
+            "def _load():\n    ...\n",
+            "def _load(*, path):\n    ...\n",
+            "def _forward(*args, **kwargs):\n    ...\n",
+            "def outer():\n    def _load(path):\n        ...\n",
+            "def _():\n    ...\n",
+            "def __load(path):\n    ...\n",
+            "def _missing_(path):\n    ...\n",
+            "class Service:\n    def _load(self, *, path):\n        ...\n",
+            "class Service:\n    @classmethod\n    def _load(cls, *, path):\n        ...\n",
+            "class Service:\n    def _load(self=None):\n        ...\n",
+            "def _load(path):  # noqa: RH002\n    ...\n",
+        ];
+        for source in allowed {
+            assert!(
+                check_explicit_private_inputs(source).is_empty(),
+                "unexpected RH002 for {source}"
+            );
+        }
     }
 
     #[test]
