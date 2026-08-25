@@ -646,6 +646,9 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
         }
         if references.loads.len() != 1
             || references.direct_calls.len() != 1
+            || !references
+                .direct_caller_calls
+                .contains(&references.direct_calls[0])
             || references.definition_count != 1
             || references.has_other_reference
         {
@@ -792,13 +795,18 @@ fn extract_binding(statement: &Stmt) -> Option<(&str, &Expr)> {
 }
 
 fn extract_direct_call(statement: &Stmt) -> Option<&Expr> {
+    let call = extract_root_call(statement)?;
+    is_direct_delegated_call(call).then_some(call)
+}
+
+fn extract_root_call(statement: &Stmt) -> Option<&Expr> {
     let expression = match statement {
         Stmt::Return(statement) => statement.value.as_deref()?,
         Stmt::Expr(statement) => statement.value.as_ref(),
         _ => return None,
     };
 
-    let call = match expression {
+    match expression {
         Expr::Call(_) => Some(expression),
         Expr::Await(await_expression)
             if matches!(await_expression.value.as_ref(), Expr::Call(_)) =>
@@ -806,8 +814,7 @@ fn extract_direct_call(statement: &Stmt) -> Option<&Expr> {
             Some(await_expression.value.as_ref())
         }
         _ => None,
-    }?;
-    is_direct_delegated_call(call).then_some(call)
+    }
 }
 
 fn is_direct_delegated_call(expression: &Expr) -> bool {
@@ -909,6 +916,7 @@ struct ReferenceVisitor<'a> {
     candidate_range: TextRange,
     loads: Vec<TextRange>,
     direct_calls: Vec<TextRange>,
+    direct_caller_calls: Vec<TextRange>,
     definition_count: usize,
     has_other_reference: bool,
     is_suppressed: bool,
@@ -927,6 +935,7 @@ impl<'a> ReferenceVisitor<'a> {
             candidate_range,
             loads: Vec::new(),
             direct_calls: Vec::new(),
+            direct_caller_calls: Vec::new(),
             definition_count: 0,
             has_other_reference: false,
             is_suppressed: false,
@@ -1075,6 +1084,9 @@ impl<'a> Visitor<'a> for ReferenceVisitor<'a> {
     }
 
     fn visit_stmt(&mut self, statement: &'a Stmt) {
+        if let Some(range) = find_direct_call_name_range(statement, self.name) {
+            self.direct_caller_calls.push(range);
+        }
         match statement {
             Stmt::FunctionDef(definition) => {
                 let is_candidate_definition = definition.name.range == self.candidate_range;
@@ -1440,6 +1452,16 @@ fn do_type_params_bind_name(type_params: &TypeParams, name: &str) -> bool {
     type_params
         .iter()
         .any(|parameter| parameter.name().as_str() == name)
+}
+
+fn find_direct_call_name_range(statement: &Stmt, name: &str) -> Option<TextRange> {
+    let Expr::Call(call) = extract_root_call(statement)? else {
+        return None;
+    };
+    let Expr::Name(target) = call.func.as_ref() else {
+        return None;
+    };
+    (target.ctx == ExprContext::Load && target.id == name).then_some(target.range)
 }
 
 fn get_bound_alias_name(alias: &Alias) -> &str {
@@ -2337,6 +2359,11 @@ mod tests {
         assert_eq!(findings[0].caller.as_ref().unwrap().row, 5);
 
         let findings = check_source(
+            "def _load(path):\n    return load(path)\n\nasync def run(path):\n    return await _load(path)\n",
+        );
+        assert_eq!(findings.len(), 1);
+
+        let findings = check_source(
             "def _load(path):  # noqaish\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
         );
         assert_eq!(findings.len(), 1);
@@ -2369,7 +2396,7 @@ mod tests {
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    _load = _load(\"path\")\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "LABEL = \"_load\"\n\ndef _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
@@ -2399,17 +2426,17 @@ mod tests {
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    _load = callback\n    del _load\n    value = _load(\"path\")\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    try:\n        pass\n    except Exception as _load:\n        value = _load(\"fallback\")\n    value = _load(\"path\")\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    _load = callback\n    run = lambda path: _load(path)\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "_load = callback\n\ndef _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
@@ -2424,7 +2451,7 @@ mod tests {
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    if enabled:\n        value = _load(\"path\")\n    else:\n        _load = callback\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "LOAD_NAME = \"_load\"\nLOAD_NAME = \"different\"\n__all__ = [LOAD_NAME]\n\ndef _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
@@ -2434,7 +2461,7 @@ mod tests {
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    try:\n        value = _load(\"path\")\n    except Exception:\n        _load = callback\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\ndef run(path):\n    callback = lambda: (_load := other)\n    return _load(path)\n",
@@ -2449,22 +2476,22 @@ mod tests {
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Outer:\n    _load = callback\n    class Inner:\n        value = _load(\"path\")\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    while _load(\"path\"):\n        _load = callback\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\ncallback = lambda path: ((lambda: (_load := other))(), _load(path))[1]\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    callback = lambda: (_load := other)\n    value = _load(\"path\")\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
     }
 
     #[test]
@@ -2488,7 +2515,7 @@ mod tests {
         let findings = check_source(
             "items = (_load(path) for path in paths)\n\ndef _load(path):\n    return load(path)\n\nconsume(items)\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "__all__ = [\"_load\"]\n__all__.clear()\n\ndef _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
@@ -2498,12 +2525,12 @@ mod tests {
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    _load: object\n    value = _load(\"path\")\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
 
         let findings = check_source(
             "def _load(path):\n    return load(path)\n\nclass Service:\n    values = [value for _load in callbacks for value in [_load]]\n    value = _load(\"path\")\n",
         );
-        assert_eq!(findings.len(), 1);
+        assert!(findings.is_empty());
     }
 
     #[test]

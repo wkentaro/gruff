@@ -20,7 +20,7 @@ Lint findings, including invalid Python syntax, will exit with status 1. Configu
 
 Human-readable findings point to both the private wrapper definition and its sole caller. Ruffhouse does not rewrite source code in the first release.
 
-RH001 flags a private module-level function only when its body is one direct delegated call, optionally preceded by one call-free local binding, and the function has one direct call with no other references.
+RH001 flags a private module-level function only when its body is one direct delegated call, optionally preceded by one call-free local binding, and its sole caller directly returns, awaits, or discards that call. Calls nested inside another expression are excluded.
 
 RH002 flags a private module-level function or method when any fixed caller-supplied input is positional or has a default. Implicit method receivers and variadic parameters are excluded.
 

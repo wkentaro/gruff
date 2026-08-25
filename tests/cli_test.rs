@@ -347,6 +347,43 @@ fn flags_wrapper_with_boolean_fallback_arguments() {
 }
 
 #[test]
+fn classifies_labeled_dogfood_wrappers() {
+    let directory = create_temp_directory("labeled-dogfood");
+    let path = directory.join("finding.py");
+    fs::write(
+        &path,
+        "def _Button(*content, cls=\"\", **kwargs):\n    return make_link(*content, **kwargs, cls=(\"base\", cls))\n\ndef _SignInButton(next):\n    return _Button(\"Sign in\", href=next)\n\ndef _GitHubStarButton():\n    return make_span(cls=\"github-star\")\n\ndef _StarUsOnGitHub():\n    return make_div(make_text(\"Star us\"), _GitHubStarButton(), make_button(\"Close\"))\n\ndef _compute_whole_file_hunk_id(filepath, *, mode):\n    return make_id(\"whole-file\", filepath, mode or \"\")\n\ndef whole_file_hunk(filepath, *, mode, status):\n    base_id = \"\" if status == \"untracked\" else _compute_whole_file_hunk_id(filepath, mode=mode)\n    return make_hunk(base_id)\n",
+    )
+    .expect("dogfood source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "RH001",
+            "--output-format",
+            "json",
+            path.to_str().unwrap(),
+        ])
+        .output()
+        .expect("ruffhouse should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 1);
+    assert!(
+        findings[0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("`_Button`")
+    );
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn warns_when_nearest_configs_disable_all_rules() {
     let directory = create_temp_directory("nearest-config");
     let nested = directory.join("nested");
