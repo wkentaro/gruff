@@ -12,17 +12,17 @@ _Avoid_: Check, heuristic
 A source location where an enabled rule detects its prohibited code shape.
 _Avoid_: Error, issue, violation
 
-**Private call wrapper**:
-A module-level private function with one direct caller whose call occupies an entire return or expression statement, no other references, and one delegated call but no control flow. It may contain one call-free local binding that prepares the delegated call, but it does not establish a meaningful boundary. Calls nested inside another expression are excluded.
-_Avoid_: Thin function, forwarder
-
 **Private definition**:
 A module-level function or method whose name starts with exactly one underscore and does not end with an underscore. Nested functions, dunder methods, name-mangled methods, and sunder protocol names are outside this term.
 _Avoid_: Internal callable, underscore function
 
-**Explicit private inputs**:
-A policy requiring every non-receiver, non-variadic input to a private definition to be required and keyword-only, so each caller supplies a fully named execution plan.
-_Avoid_: Explicit private options, private kwargs, no private defaults
+**Keyword-only private inputs**:
+A policy requiring every non-receiver, non-variadic input to a private definition to be keyword-only, so callers name each supplied value.
+_Avoid_: Private kwargs, named private inputs
+
+**Required private inputs**:
+A policy requiring every non-receiver, non-variadic input to a private definition to have no default, so callers supply each value.
+_Avoid_: No private defaults, explicit private inputs
 
 **Review miner**:
 A development tool that extracts candidate review episodes from local Codex and Claude histories for agent and human evaluation of possible rules. Its output is temporary evidence, never a rule or finding.
