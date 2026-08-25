@@ -14,9 +14,34 @@ Flags a private module-level function only when its body is one direct delegated
 
 The diagnostic points to both the private wrapper definition and its sole caller.
 
+Before → after:
+
+```diff
+-def _load_user(*, path: str) -> User:
+-    return load_user(path)
+-
+ def show_user(path: str) -> User:
+-    return _load_user(path=path)
++    return load_user(path)
+```
+
 ### `explicit-private-inputs` (RH002)
 
 Flags a private module-level function or method when any fixed caller-supplied input is positional or has a default. Implicit method receivers and variadic parameters are excluded.
+
+Before → after:
+
+```diff
+-def _resize_image(data: bytes, width: int = 512) -> bytes:
++def _resize_image(*, data: bytes, width: int) -> bytes:
+     if width <= 0:
+         raise ValueError("width must be positive")
+     return resize(data, width=width)
+
+ def make_thumbnail(data: bytes) -> bytes:
+-    return _resize_image(data)
++    return _resize_image(data=data, width=512)
+```
 
 ## Interface
 
