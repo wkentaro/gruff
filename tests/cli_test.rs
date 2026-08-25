@@ -280,6 +280,34 @@ fn includes_the_sole_caller_in_github_output() {
 }
 
 #[test]
+fn flags_wrapper_with_boolean_fallback_arguments() {
+    let directory = create_temp_directory("boolean-fallback");
+    let path = directory.join("finding.py");
+    fs::write(
+        &path,
+        "def _compute_whole_file_hunk_id(filepath, *, a_mode, b_mode):\n    return _hash_id(\"whole-file\", filepath, a_mode or \"\", b_mode or \"\")\n\ndef whole_file_hunk(filepath, *, a_mode, b_mode):\n    return _compute_whole_file_hunk_id(filepath, a_mode=a_mode, b_mode=b_mode)\n",
+    )
+    .expect("finding source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "RH001",
+            path.to_str().unwrap(),
+        ])
+        .output()
+        .expect("ruffhouse should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("_compute_whole_file_hunk_id"));
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn warns_when_nearest_configs_disable_all_rules() {
     let directory = create_temp_directory("nearest-config");
     let nested = directory.join("nested");

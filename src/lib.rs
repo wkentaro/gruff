@@ -747,7 +747,6 @@ impl<'a> Visitor<'a> for DelegatedCallVisitor {
         match expression {
             Expr::Call(_) => self.call_count += 1,
             Expr::If(_)
-            | Expr::BoolOp(_)
             | Expr::Lambda(_)
             | Expr::ListComp(_)
             | Expr::SetComp(_)
@@ -2350,7 +2349,6 @@ mod tests {
             "def _load(path):\n    return load(path)\n\ntype Value[_load] = _load(\"path\")\n",
             "def _load(path):\n    return load(path)\n\nclass Service:\n    def run(self, callback=lambda _load: _load(\"path\")):\n        return callback()\n",
             "def _decorate(*args):\n    return make_decorator(*args)\n\n@_decorate(\"value\")\ndef run():\n    pass\n",
-            "def _load(path, fallback):\n    return load(path or fallback)\n\ndef run(path, fallback):\n    return _load(path, fallback)\n",
             "__all__ = [f\"_load\"]\n\ndef _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
             "__all__ = [\"_lo\" + \"ad\"]\n\ndef _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
             "__all__ = []\n__all__.append(\"_load\")\n\ndef _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
