@@ -17,5 +17,13 @@ A module-level private function with one direct caller, no other references, and
 _Avoid_: Thin function, forwarder
 
 **Review miner**:
-A development tool that extracts repeated corrections from existing agent review history to nominate possible rules. Its output is evidence for human evaluation, never a lint finding.
+A development tool that extracts candidate review episodes from local Codex and Claude histories for agent and human evaluation of possible rules. Its output is temporary evidence, never a rule or finding.
 _Avoid_: Linter, detector
+
+**Candidate review episode**:
+A non-initial direct-human turn between two agent code mutations in the same thread. It is input to semantic review, not yet a review correction.
+_Avoid_: Correction, finding
+
+**Review correction**:
+An agent-produced code change made after explicit human feedback about earlier agent-produced code in the same review history.
+_Avoid_: Feedback, edit
