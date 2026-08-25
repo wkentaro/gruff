@@ -1,0 +1,3 @@
+# Enforce explicit private inputs
+
+RH002 requires every fixed caller-supplied input to a private module function or method to be required and keyword-only, rather than targeting only parameters with defaults. This makes each private call a fully named execution plan at the cost of a deliberately broader migration: the specification sweep found about 480 affected definitions across the reference repositories, compared with about 57 involving defaults. The rule starts opt-in, leaves implicit receivers and variadic parameters unchanged, and relies on explicit suppression for externally imposed positional contracts.

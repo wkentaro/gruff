@@ -2,9 +2,9 @@
 
 Ruffhouse is an opinionated, deterministic maintainability linter for Python. It complements Ruff with project policies that make agent-assisted code easier to understand and review; it does not infer who or what wrote the code.
 
-The first release tests one thesis: single-use private call wrappers that add no meaningful boundary make agent-written code harder to follow.
+The first release tests two theses: single-use private call wrappers add needless indirection, and private definitions are easier to review when every fixed input is required and keyword-only.
 
-RH001 is opt-in while that thesis is validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+RH001 and RH002 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
 ## Interface
 
@@ -13,6 +13,7 @@ Ruffhouse will follow Ruff's familiar command and diagnostic conventions:
 ```console
 ruffhouse check .
 ruffhouse check --select RH001 .
+ruffhouse check --select RH002 .
 ```
 
 Lint findings, including invalid Python syntax, will exit with status 1. Configuration, I/O, and internal failures will exit with status 2.
@@ -21,13 +22,15 @@ Human-readable findings point to both the private wrapper definition and its sol
 
 RH001 flags a private module-level function only when its body is one direct delegated call, optionally preceded by one call-free local binding, and the function has one direct call with no other references.
 
+RH002 flags a private module-level function or method when any fixed caller-supplied input is positional or has a default. Implicit method receivers and variadic parameters are excluded.
+
 ## Configuration
 
 Ruffhouse reads configuration only from `pyproject.toml`:
 
 ```toml
 [tool.ruffhouse.lint]
-select = ["RH001"]
+select = ["RH001", "RH002"]
 ignore = []
 ```
 
