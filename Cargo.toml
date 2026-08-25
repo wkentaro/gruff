@@ -10,3 +10,12 @@ readme = "README.md"
 publish = false
 
 [dependencies]
+clap = { version = "4.5.47", features = ["derive"] }
+globset = "0.4.16"
+ignore = "0.4.23"
+ruff_python_ast = "=0.0.10"
+ruff_python_parser = "=0.0.10"
+ruff_text_size = "=0.0.10"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.143"
+toml = "0.9.5"
