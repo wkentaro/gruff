@@ -13,7 +13,7 @@ A source location where an enabled rule detects its prohibited code shape.
 _Avoid_: Error, issue, violation
 
 **Private call wrapper**:
-A module-level private function with one direct caller, no other references, and one delegated call but no control flow. It may contain one call-free local binding that prepares the delegated call, but it does not establish a meaningful boundary.
+A module-level private function with one direct caller whose call occupies an entire return or expression statement, no other references, and one delegated call but no control flow. It may contain one call-free local binding that prepares the delegated call, but it does not establish a meaningful boundary. Calls nested inside another expression are excluded.
 _Avoid_: Thin function, forwarder
 
 **Private definition**:
