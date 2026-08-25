@@ -6,6 +6,43 @@ The first release tests two theses: single-use private call wrappers add needles
 
 RH001 and RH002 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
+## Rules
+
+### `private-call-wrapper` (RH001)
+
+Flags a private module-level function only when its body is one direct delegated call, optionally preceded by one call-free local binding, and its sole caller directly returns, awaits, or discards that call. Calls nested inside another expression are excluded.
+
+The diagnostic points to both the private wrapper definition and its sole caller.
+
+Before → after:
+
+```diff
+-def _load_user(*, path: str) -> User:
+-    return load_user(path)
+-
+ def show_user(path: str) -> User:
+-    return _load_user(path=path)
++    return load_user(path)
+```
+
+### `explicit-private-inputs` (RH002)
+
+Flags a private module-level function or method when any fixed caller-supplied input is positional or has a default. Implicit method receivers and variadic parameters are excluded.
+
+Before → after:
+
+```diff
+-def _resize_image(data: bytes, width: int = 512) -> bytes:
++def _resize_image(*, data: bytes, width: int) -> bytes:
+     if width <= 0:
+         raise ValueError("width must be positive")
+     return resize(data, width=width)
+
+ def make_thumbnail(data: bytes) -> bytes:
+-    return _resize_image(data)
++    return _resize_image(data=data, width=512)
+```
+
 ## Interface
 
 Ruffhouse will follow Ruff's familiar command and diagnostic conventions:
@@ -18,11 +55,7 @@ ruffhouse check --select RH002 .
 
 Lint findings, including invalid Python syntax, will exit with status 1. Configuration, I/O, and internal failures will exit with status 2.
 
-Human-readable findings point to both the private wrapper definition and its sole caller. Ruffhouse does not rewrite source code in the first release.
-
-RH001 flags a private module-level function only when its body is one direct delegated call, optionally preceded by one call-free local binding, and its sole caller directly returns, awaits, or discards that call. Calls nested inside another expression are excluded.
-
-RH002 flags a private module-level function or method when any fixed caller-supplied input is positional or has a default. Implicit method receivers and variadic parameters are excluded.
+Ruffhouse does not rewrite source code in the first release.
 
 ## Configuration
 
