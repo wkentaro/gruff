@@ -2,44 +2,41 @@
 
 Ruffhouse is an opinionated, deterministic maintainability linter for Python. It complements Ruff with project policies that make agent-assisted code easier to understand and review; it does not infer who or what wrote the code.
 
-The first release tests two theses: single-use private call wrappers add needless indirection, and private definitions are easier to review when every fixed input is required and keyword-only.
+The first release tests two theses: private inputs are easier to trace when callers name them, and private behavior is easier to review when callers supply every value.
 
 RH001 and RH002 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
 ## Rules
 
-### `private-call-wrapper` (RH001)
+### `keyword-only-private-inputs` (RH001)
 
-Flags a private module-level function only when its body is one direct delegated call, optionally preceded by one call-free local binding, and its sole caller directly returns, awaits, or discards that call. Calls nested inside another expression are excluded.
-
-The diagnostic points to both the private wrapper definition and its sole caller.
+Flags each fixed caller-supplied input to a private module-level function or method that is positional; implicit method receivers and variadic parameters are excluded.
 
 Before → after:
 
 ```diff
--def _load_user(*, path: str) -> User:
--    return load_user(path)
--
- def show_user(path: str) -> User:
--    return _load_user(path=path)
-+    return load_user(path)
-```
-
-### `explicit-private-inputs` (RH002)
-
-Flags a private module-level function or method when any fixed caller-supplied input is positional or has a default. Implicit method receivers and variadic parameters are excluded.
-
-Before → after:
-
-```diff
--def _resize_image(data: bytes, width: int = 512) -> bytes:
+-def _resize_image(data: bytes, width: int) -> bytes:
 +def _resize_image(*, data: bytes, width: int) -> bytes:
-     if width <= 0:
-         raise ValueError("width must be positive")
      return resize(data, width=width)
 
  def make_thumbnail(data: bytes) -> bytes:
--    return _resize_image(data)
+-    return _resize_image(data, width=512)
++    return _resize_image(data=data, width=512)
+```
+
+### `required-private-inputs` (RH002)
+
+Flags each fixed caller-supplied input to a private module-level function or method that has a default; implicit method receivers and variadic parameters are excluded.
+
+Before → after:
+
+```diff
+-def _resize_image(*, data: bytes, width: int = 512) -> bytes:
++def _resize_image(*, data: bytes, width: int) -> bytes:
+     return resize(data, width=width)
+
+ def make_thumbnail(data: bytes) -> bytes:
+-    return _resize_image(data=data)
 +    return _resize_image(data=data, width=512)
 ```
 
@@ -51,6 +48,7 @@ Ruffhouse will follow Ruff's familiar command and diagnostic conventions:
 ruffhouse check .
 ruffhouse check --select RH001 .
 ruffhouse check --select RH002 .
+ruffhouse check --select RH001,RH002 .
 ```
 
 Lint findings, including invalid Python syntax, will exit with status 1. Configuration, I/O, and internal failures will exit with status 2.

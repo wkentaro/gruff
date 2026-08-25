@@ -41,21 +41,15 @@ fn checks_config_suppression_json_and_exit_status() {
         "[tool.ruffhouse]\noutput-format = \"json\"\n\n[tool.ruffhouse.lint]\nselect = [\"RH001\"]\nper-file-ignores = { \"ignored.py\" = [\"RH001\"], \"invalid.py\" = [\"RH001\"] }\n",
     )
     .expect("test configuration should be written");
-    fs::write(
-        directory.join("finding.py"),
-        "def _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
-    )
-    .expect("finding source should be written");
+    fs::write(directory.join("finding.py"), "def _load(path):\n    ...\n")
+        .expect("finding source should be written");
     fs::write(
         directory.join("suppressed.py"),
-        "def _save(path):  # noqa: RH001\n    return save(path)\n\ndef run(path):\n    return _save(path)\n",
+        "def _save(path):  # noqa: RH001\n    ...\n",
     )
     .expect("suppressed source should be written");
-    fs::write(
-        directory.join("ignored.py"),
-        "def _send(path):\n    return send(path)\n\ndef run(path):\n    return _send(path)\n",
-    )
-    .expect("ignored source should be written");
+    fs::write(directory.join("ignored.py"), "def _send(path):\n    ...\n")
+        .expect("ignored source should be written");
     fs::write(directory.join("invalid.py"), "def broken(\n")
         .expect("invalid source should be written");
 
@@ -70,7 +64,7 @@ fn checks_config_suppression_json_and_exit_status() {
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
     assert_eq!(findings.as_array().unwrap().len(), 2);
     assert_eq!(findings[0]["code"], "RH001");
-    assert_eq!(findings[0]["name"], "private-call-wrapper");
+    assert_eq!(findings[0]["name"], "keyword-only-private-inputs");
     assert_eq!(findings[0]["severity"], "error");
     assert_eq!(findings[0]["location"]["row"], 1);
     assert!(PathBuf::from(findings[0]["filename"].as_str().unwrap()).is_absolute());
@@ -82,8 +76,8 @@ fn checks_config_suppression_json_and_exit_status() {
 }
 
 #[test]
-fn checks_explicit_private_inputs_selection_and_suppression() {
-    let directory = create_temp_directory("explicit-private-inputs");
+fn checks_required_private_inputs_selection_and_suppression() {
+    let directory = create_temp_directory("required-private-inputs");
     fs::write(
         directory.join("pyproject.toml"),
         "[tool.ruffhouse.lint]\nselect = [\"RH002\"]\n",
@@ -91,12 +85,12 @@ fn checks_explicit_private_inputs_selection_and_suppression() {
     .expect("test configuration should be written");
     fs::write(
         directory.join("finding.py"),
-        "def _render(path):\n    ...\n",
+        "def _render(*, path=None):\n    ...\n",
     )
     .expect("finding source should be written");
     fs::write(
         directory.join("suppressed.pyi"),
-        "def _load(path): ...  # noqa: RH002\n",
+        "def _load(*, path=None): ...  # noqa: RH002\n",
     )
     .expect("suppressed source should be written");
 
@@ -111,10 +105,10 @@ fn checks_explicit_private_inputs_selection_and_suppression() {
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
     assert_eq!(findings.as_array().unwrap().len(), 1);
     assert_eq!(findings[0]["code"], "RH002");
-    assert_eq!(findings[0]["name"], "explicit-private-inputs");
+    assert_eq!(findings[0]["name"], "required-private-inputs");
     assert_eq!(
         findings[0]["message"],
-        "Private definition `_render` must receive required keyword-only inputs."
+        "Private input `path` must be required"
     );
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
@@ -129,11 +123,7 @@ fn follows_ruff_selector_specificity() {
         "[tool.ruffhouse.lint]\nselect = [\"RH001\"]\nignore = [\"RH001\"]\n",
     )
     .expect("test configuration should be written");
-    fs::write(
-        &path,
-        "def _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
-    )
-    .expect("finding source should be written");
+    fs::write(&path, "def _load(path):\n    ...\n").expect("finding source should be written");
 
     let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
         .args(["check", "--select", "RH", path.to_str().unwrap()])
@@ -198,24 +188,13 @@ fn checks_hidden_files_once() {
         "[tool.ruffhouse.lint]\nselect = [\"RH001\"]\n",
     )
     .expect("test configuration should be written");
-    fs::write(
-        &path,
-        "def _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
-    )
-    .expect("finding source should be written");
+    fs::write(&path, "def _load(path):\n    ...\n").expect("finding source should be written");
     fs::create_dir_all(excluded_path.parent().unwrap())
         .expect("excluded directory should be created");
-    fs::write(
-        &excluded_path,
-        "def _save(path):\n    return save(path)\n\ndef run(path):\n    return _save(path)\n",
-    )
-    .expect("excluded source should be written");
+    fs::write(&excluded_path, "def _save(path):\n    ...\n")
+        .expect("excluded source should be written");
     fs::create_dir(build_path.parent().unwrap()).expect("build directory should be created");
-    fs::write(
-        &build_path,
-        "def _paint(path):\n    return paint(path)\n\ndef run(path):\n    return _paint(path)\n",
-    )
-    .expect("build source should be written");
+    fs::write(&build_path, "def _paint(path):\n    ...\n").expect("build source should be written");
 
     let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
         .args(["check", directory.to_str().unwrap(), path.to_str().unwrap()])
@@ -224,7 +203,7 @@ fn checks_hidden_files_once() {
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&output.stdout)
-            .matches("RH001 Private call wrapper")
+            .matches("RH001 Private input")
             .count(),
         2
     );
@@ -265,14 +244,10 @@ fn validates_per_file_globs_without_python_files() {
 }
 
 #[test]
-fn includes_the_sole_caller_in_github_output() {
+fn formats_github_output() {
     let directory = create_temp_directory("github");
     let path = directory.join("finding.py");
-    fs::write(
-        &path,
-        "def _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
-    )
-    .expect("finding source should be written");
+    fs::write(&path, "def _load(path):\n    ...\n").expect("finding source should be written");
 
     let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
         .args([
@@ -282,18 +257,14 @@ fn includes_the_sole_caller_in_github_output() {
             "RH001",
             "--output-format",
             "github",
-            "finding.py",
+            path.to_str().unwrap(),
         ])
-        .current_dir(&directory)
         .output()
         .expect("ruffhouse should run");
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let absolute_path = fs::canonicalize(&path).expect("source path should resolve");
-    assert!(stdout.contains(&format!(
-        "%0A  {}:5:12: Sole caller",
-        absolute_path.display()
-    )));
+    assert!(stdout.contains("line=1,col=11,endLine=1,endColumn=15"));
+    assert!(stdout.contains("Private input `path` must be keyword-only"));
     assert!(output.stderr.is_empty());
 
     fs::write(&path, "value = \"\"\"unterminated\nstring\n")
@@ -314,71 +285,6 @@ fn includes_the_sole_caller_in_github_output() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("line=1,endLine=3::"));
     assert!(!stdout.contains("line=1,col="));
-
-    fs::remove_dir_all(directory).expect("test directory should be removed");
-}
-
-#[test]
-fn flags_wrapper_with_boolean_fallback_arguments() {
-    let directory = create_temp_directory("boolean-fallback");
-    let path = directory.join("finding.py");
-    fs::write(
-        &path,
-        "def _compute_whole_file_hunk_id(filepath, *, a_mode, b_mode):\n    return _hash_id(\"whole-file\", filepath, a_mode or \"\", b_mode or \"\")\n\ndef whole_file_hunk(filepath, *, a_mode, b_mode):\n    return _compute_whole_file_hunk_id(filepath, a_mode=a_mode, b_mode=b_mode)\n",
-    )
-    .expect("finding source should be written");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
-        .args([
-            "check",
-            "--isolated",
-            "--select",
-            "RH001",
-            path.to_str().unwrap(),
-        ])
-        .output()
-        .expect("ruffhouse should run");
-
-    assert_eq!(output.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&output.stdout).contains("_compute_whole_file_hunk_id"));
-    assert!(output.stderr.is_empty());
-
-    fs::remove_dir_all(directory).expect("test directory should be removed");
-}
-
-#[test]
-fn classifies_labeled_dogfood_wrappers() {
-    let directory = create_temp_directory("labeled-dogfood");
-    let path = directory.join("finding.py");
-    fs::write(
-        &path,
-        "def _Button(*content, cls=\"\", **kwargs):\n    return make_link(*content, **kwargs, cls=(\"base\", cls))\n\ndef _SignInButton(next):\n    return _Button(\"Sign in\", href=next)\n\ndef _GitHubStarButton():\n    return make_span(cls=\"github-star\")\n\ndef _StarUsOnGitHub():\n    return make_div(make_text(\"Star us\"), _GitHubStarButton(), make_button(\"Close\"))\n\ndef _compute_whole_file_hunk_id(filepath, *, mode):\n    return make_id(\"whole-file\", filepath, mode or \"\")\n\ndef whole_file_hunk(filepath, *, mode, status):\n    base_id = \"\" if status == \"untracked\" else _compute_whole_file_hunk_id(filepath, mode=mode)\n    return make_hunk(base_id)\n",
-    )
-    .expect("dogfood source should be written");
-
-    let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
-        .args([
-            "check",
-            "--isolated",
-            "--select",
-            "RH001",
-            "--output-format",
-            "json",
-            path.to_str().unwrap(),
-        ])
-        .output()
-        .expect("ruffhouse should run");
-
-    assert_eq!(output.status.code(), Some(1));
-    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
-    assert_eq!(findings.as_array().unwrap().len(), 1);
-    assert!(
-        findings[0]["message"]
-            .as_str()
-            .unwrap()
-            .contains("`_Button`")
-    );
-    assert!(output.stderr.is_empty());
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }
@@ -413,11 +319,7 @@ fn warns_when_nearest_configs_disable_all_rules() {
 fn supports_absolute_ignores_and_explicit_non_python_files() {
     let directory = create_temp_directory("absolute-ignore");
     let path = directory.join("policy.txt");
-    fs::write(
-        &path,
-        "def _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
-    )
-    .expect("finding source should be written");
+    fs::write(&path, "def _load(path):\n    ...\n").expect("finding source should be written");
     let pattern = path.display().to_string().replace('\\', "\\\\");
     fs::write(
         directory.join("pyproject.toml"),
@@ -461,11 +363,8 @@ fn respects_gitignore_except_for_explicit_files() {
     .expect("test configuration should be written");
     fs::write(directory.join(".gitignore"), "ignored.py\n").expect("ignore file should be written");
     fs::create_dir(directory.join(".git")).expect("git marker should be created");
-    fs::write(
-        &ignored_path,
-        "def _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
-    )
-    .expect("ignored source should be written");
+    fs::write(&ignored_path, "def _load(path):\n    ...\n")
+        .expect("ignored source should be written");
 
     let discovered_output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
         .args(["check", directory.to_str().unwrap()])
@@ -532,11 +431,8 @@ fn distinguishes_syntax_and_configuration_failures() {
 fn supports_negated_per_file_ignores() {
     let directory = create_temp_directory("negated-ignore");
     for name in ["keep.py", "drop.py"] {
-        fs::write(
-            directory.join(name),
-            "def _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
-        )
-        .expect("finding source should be written");
+        fs::write(directory.join(name), "def _load(path):\n    ...\n")
+            .expect("finding source should be written");
     }
     fs::write(
         directory.join("pyproject.toml"),
@@ -577,7 +473,7 @@ fn resolves_explicit_config_patterns_from_current_directory() {
     .expect("test configuration should be written");
     fs::write(
         source_directory.join("finding.py"),
-        "def _load(path):\n    return load(path)\n\ndef run(path):\n    return _load(path)\n",
+        "def _load(path):\n    ...\n",
     )
     .expect("finding source should be written");
 
