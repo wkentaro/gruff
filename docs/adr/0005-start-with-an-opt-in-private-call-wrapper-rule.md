@@ -1,0 +1,3 @@
+# Start with an opt-in private call wrapper rule
+
+RH001 flags an undecorated, non-dunder module function with a private name when it has exactly one direct caller, no other references, and no behavior beyond one delegated call plus at most one call-free local binding. Sync, async, returned, and discarded calls are eligible; generators, methods, control flow, and transformed call results are excluded. The rule remains opt-in while repository trials establish that removing these wrappers reliably reduces review work.
