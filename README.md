@@ -4,7 +4,13 @@ Gruff is an opinionated, deterministic maintainability linter for Python. It com
 
 The first release tests four theses: private inputs are easier to trace when callers name them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
 
-GR001, GR002, GR003, and GR004 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+All rules are opt-in. Teams enable policies one at a time as they decide which opinionated constraints fit their codebase. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+
+## Installation
+
+```console
+pip install gruff
+```
 
 ## Rules
 

@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
+use ruff_python_ast::CmpOp;
 use ruff_python_ast::ElifElseClause;
 use ruff_python_ast::ExceptHandler;
 use ruff_python_ast::Expr;
 use ruff_python_ast::Pattern;
+use ruff_python_ast::Singleton;
 use ruff_python_ast::Stmt;
 use ruff_python_ast::UnaryOp;
 use ruff_python_ast::visitor::Visitor;
@@ -59,7 +61,7 @@ struct State {
     history: Option<Rc<Operation>>,
     flow: Flow,
     exception: Option<String>,
-    conditions: Vec<(String, bool)>,
+    conditions: Vec<(ConditionKey, bool)>,
     type_checking_bindings: HashMap<String, TypeCheckingBinding>,
 }
 
@@ -84,7 +86,8 @@ impl State {
     }
 
     fn bind(&mut self, binding: Binding<'_>) {
-        self.conditions.retain(|(name, _)| name != binding.name);
+        self.conditions
+            .retain(|(condition, _)| condition.name != binding.name);
         self.type_checking_bindings.remove(binding.name);
         self.add_operation(OperationKind::Bind {
             name: binding.name.to_owned(),
@@ -93,7 +96,8 @@ impl State {
     }
 
     fn delete(&mut self, binding: Binding<'_>) {
-        self.conditions.retain(|(name, _)| name != binding.name);
+        self.conditions
+            .retain(|(condition, _)| condition.name != binding.name);
         self.type_checking_bindings.remove(binding.name);
         self.add_operation(OperationKind::Delete {
             name: binding.name.to_owned(),
@@ -563,6 +567,12 @@ enum Condition {
     Unknown,
 }
 
+#[derive(Clone, PartialEq)]
+struct ConditionKey {
+    name: String,
+    identity: Option<Singleton>,
+}
+
 fn classify_condition(expression: &Expr, state: &State) -> Condition {
     match expression {
         Expr::BooleanLiteral(literal) => {
@@ -628,7 +638,7 @@ fn branch_unknown_condition(
     matched: &mut Vec<State>,
     skipped: &mut Vec<State>,
 ) {
-    let Some((name, polarity)) = get_condition_key(expression) else {
+    let Some((key, polarity)) = get_condition_key(expression) else {
         matched.push(state.clone());
         skipped.push(state);
         return;
@@ -636,7 +646,7 @@ fn branch_unknown_condition(
     if let Some((_, value)) = state
         .conditions
         .iter()
-        .find(|(existing, _)| existing == name)
+        .find(|(existing, _)| existing == &key)
     {
         if *value == polarity {
             matched.push(state);
@@ -650,10 +660,10 @@ fn branch_unknown_condition(
     if matched_state.conditions.len() == MAX_CONDITIONS {
         return;
     }
-    matched_state.conditions.push((name.to_owned(), polarity));
+    matched_state.conditions.push((key.clone(), polarity));
     matched.push(matched_state);
     let mut skipped_state = state;
-    skipped_state.conditions.push((name.to_owned(), !polarity));
+    skipped_state.conditions.push((key, !polarity));
     skipped.push(skipped_state);
 }
 
@@ -692,14 +702,47 @@ fn does_handler_catch(handler: Option<&Expr>, exception: Option<&str>) -> bool {
     }
 }
 
-fn get_condition_key(expression: &Expr) -> Option<(&str, bool)> {
+fn get_condition_key(expression: &Expr) -> Option<(ConditionKey, bool)> {
     match expression {
-        Expr::Name(name) if name.id != "TYPE_CHECKING" => Some((name.id.as_str(), true)),
+        Expr::Name(name) if name.id != "TYPE_CHECKING" => Some((
+            ConditionKey {
+                name: name.id.to_string(),
+                identity: None,
+            },
+            true,
+        )),
         Expr::UnaryOp(unary) if unary.op == UnaryOp::Not => {
-            get_condition_key(&unary.operand).map(|(name, polarity)| (name, !polarity))
+            get_condition_key(&unary.operand).map(|(key, polarity)| (key, !polarity))
+        }
+        Expr::Compare(comparison)
+            if comparison.ops.len() == 1 && comparison.comparators.len() == 1 =>
+        {
+            let polarity = match comparison.ops[0] {
+                CmpOp::Is => true,
+                CmpOp::IsNot => false,
+                _ => return None,
+            };
+            get_identity_key(&comparison.left, &comparison.comparators[0])
+                .map(|key| (key, polarity))
         }
         _ => None,
     }
+}
+
+fn get_identity_key(left: &Expr, right: &Expr) -> Option<ConditionKey> {
+    let (name, value) = match (left, right) {
+        (Expr::Name(name), value) | (value, Expr::Name(name)) => (name, value),
+        _ => return None,
+    };
+    let value = match value {
+        Expr::BooleanLiteral(literal) => Singleton::from(literal.value),
+        Expr::NoneLiteral(_) => Singleton::None,
+        _ => return None,
+    };
+    Some(ConditionKey {
+        name: name.id.to_string(),
+        identity: Some(value),
+    })
 }
 
 fn bind_states(states: &mut [State], binding: Binding<'_>) {
