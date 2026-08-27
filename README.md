@@ -2,10 +2,6 @@
 
 Gruff is an opinionated, deterministic maintainability linter for Python. It complements Ruff with project policies that make agent-assisted code easier to understand and review; it does not infer who or what wrote the code.
 
-The first release tests four theses: private inputs are easier to trace when callers name them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
-
-All rules are opt-in. Teams enable policies one at a time as they decide which opinionated constraints fit their codebase. A check with no enabled rules succeeds but warns that it performed no policy analysis.
-
 ## Installation
 
 Requires Python 3.10 or later.
@@ -34,7 +30,66 @@ gruff --version
 > uv tool install git+https://github.com/wkentaro/gruff
 > ```
 
-## Rules
+## Quick start
+
+Enable every Gruff rule in `pyproject.toml`:
+
+```toml
+[tool.gruff.lint]
+select = ["GR"]
+```
+
+Then check the current directory:
+
+```bash
+gruff check .
+```
+
+All rules are opt-in. Use an exact code such as `GR001` to adopt rules individually; `GR` enables every Gruff rule. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+
+## Rules at a glance
+
+The first release tests four theses: private inputs are easier to trace when callers name them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
+
+| Code | Rule | Policy |
+| --- | --- | --- |
+| GR001 | [`keyword-only-private-inputs`](#keyword-only-private-inputs-gr001) | Callers name every fixed input to private callables. |
+| GR002 | [`required-private-inputs`](#required-private-inputs-gr002) | Callers supply every fixed input to private callables. |
+| GR003 | [`package-dunder-all`](#package-dunder-all-gr003) | Every public package import path defines `__all__`. |
+| GR004 | [`final-constants`](#final-constants-gr004) | Uppercase names and `Final` annotations appear together. |
+
+## Configuration and CLI
+
+Gruff reads configuration only from `pyproject.toml`:
+
+```toml
+[tool.gruff]
+output-format = "full"
+
+[tool.gruff.lint]
+select = ["GR001", "GR002", "GR003", "GR004"]
+ignore = []
+per-file-ignores = { "callbacks.py" = ["GR001"] }
+```
+
+`output-format` accepts `full`, `concise`, `json`, or `github`. Rule selectors accept an exact code, the `GR` prefix, or `ALL`; the more specific selector wins when `select` and `ignore` overlap, and `ignore` wins ties.
+
+Command-line options override configuration:
+
+```console
+gruff check .
+gruff check --select GR001,GR002 .
+gruff check --ignore GR004 .
+gruff check --output-format github .
+gruff check --config path/to/pyproject.toml .
+gruff check --isolated --select GR .
+```
+
+Pass files or directories as paths. Directory discovery checks `.py`, `.pyi`, and `.pyw` files and respects Git ignore files. Run `gruff check --help` for the complete command reference.
+
+Lint findings, including invalid Python syntax, exit with status 1. Configuration, I/O, and internal failures exit with status 2. Gruff does not rewrite source code in the first release.
+
+## Rule reference
 
 ### `keyword-only-private-inputs` (GR001)
 
@@ -206,36 +261,6 @@ GR003 only requires the manifest to exist. Once it does, `F401` flags re-exports
 +    formats: ClassVar[list[str]] = ["png", "jpg"]
 ```
 
-## Interface
-
-Gruff will follow Ruff's familiar command and diagnostic conventions:
-
-```console
-gruff check .
-gruff check --select GR001 .
-gruff check --select GR002 .
-gruff check --select GR003 .
-gruff check --select GR004 .
-gruff check --select GR001,GR002,GR003,GR004 .
-```
-
-Lint findings, including invalid Python syntax, will exit with status 1. Configuration, I/O, and internal failures will exit with status 2.
-
-Gruff does not rewrite source code in the first release.
-
-## Configuration
-
-Gruff reads configuration only from `pyproject.toml`:
-
-```toml
-[tool.gruff.lint]
-select = ["GR001", "GR002", "GR003", "GR004"]
-ignore = []
-per-file-ignores = { "callbacks.py" = ["GR001"] }
-```
-
-Directory discovery checks `.py`, `.pyi`, and `.pyw` files and respects Git ignore files.
-
 ## Distribution
 
-Public releases will use PyPI wheels for Linux x86_64 and aarch64, macOS x86_64 and arm64, and Windows x86_64. Gruff is not published to crates.io.
+Gruff releases use PyPI wheels for Linux x86_64 and aarch64, macOS x86_64 and arm64, and Windows x86_64. Gruff is not published to crates.io.
