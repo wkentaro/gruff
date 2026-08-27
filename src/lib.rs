@@ -29,7 +29,7 @@ mod rules;
 struct Rule {
     code: &'static str,
     name: &'static str,
-    check: fn(&[Stmt]) -> Vec<rules::Diagnostic>,
+    check: fn(&Path, &[Stmt]) -> Vec<rules::Diagnostic>,
 }
 
 const RULES: &[Rule] = &[
@@ -42,6 +42,11 @@ const RULES: &[Rule] = &[
         code: rules::required_private_inputs::CODE,
         name: rules::required_private_inputs::NAME,
         check: rules::required_private_inputs::check,
+    },
+    Rule {
+        code: rules::package_dunder_all::CODE,
+        name: rules::package_dunder_all::NAME,
+        check: rules::package_dunder_all::check,
     },
     Rule {
         code: rules::final_constants::CODE,
@@ -595,7 +600,7 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     for rule in RULES {
-        for diagnostic in (rule.check)(parsed.suite()) {
+        for diagnostic in (rule.check)(path, parsed.suite()) {
             let noqa_row = find_noqa_row(source, parsed.tokens(), diagnostic.range);
             if has_noqa(source, parsed.tokens(), noqa_row, rule.code) {
                 continue;

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use ruff_python_ast::Stmt;
 
 use super::Diagnostic;
@@ -7,7 +9,7 @@ use crate::analysis::find_private_definitions;
 pub(crate) const CODE: &str = "GR002";
 pub(crate) const NAME: &str = "required-private-inputs";
 
-pub(crate) fn check(statements: &[Stmt]) -> Vec<Diagnostic> {
+pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     find_private_definitions(statements)
         .into_iter()
         .flat_map(|(definition, is_method)| {

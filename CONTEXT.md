@@ -24,6 +24,10 @@ _Avoid_: Private kwargs, named private inputs
 A policy requiring every non-receiver, non-variadic input to a private definition to have no default, so callers supply each value.
 _Avoid_: No private defaults, explicit private inputs
 
+**Package dunder all**:
+A policy requiring every successfully completing package-initializer path with public bindings to finish with `__all__` bound.
+_Avoid_: Explicit exports, package exports
+
 **Final constants**:
 A policy requiring every simple-name constant binding to pair an uppercase name with a `Final` annotation in every lexical scope.
 _Avoid_: Uppercase variables, final variables

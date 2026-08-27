@@ -2,9 +2,9 @@
 
 Gruff is an opinionated, deterministic maintainability linter for Python. It complements Ruff with project policies that make agent-assisted code easier to understand and review; it does not infer who or what wrote the code.
 
-The first release tests three theses: private inputs are easier to trace when callers name them, private behavior is easier to review when callers supply every value, and constants are easier to review when uppercase names and `Final` annotations always appear together.
+The first release tests four theses: private inputs are easier to trace when callers name them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
 
-GR001, GR002, and GR004 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+GR001, GR002, GR003, and GR004 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
 ## Recommended Ruff pairing
 
@@ -14,6 +14,8 @@ Gruff does not duplicate checks that Ruff already provides. Enable Ruff's `ARG` 
 [tool.ruff.lint]
 extend-select = ["ARG"]
 ```
+
+For packages checked by GR003, enable Ruff's `F822` to find undefined names in `__all__` and `RUF022` to sort static manifests. GR003 only requires the manifest to exist.
 
 ## Rules
 
@@ -49,6 +51,19 @@ Before → after:
 +    return _resize_image(data=data, width=512)
 ```
 
+### `package-dunder-all` (GR003)
+
+Flags a package initializer when a successfully completing import path leaves a public binding without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, private-only, type-checking-only, and statically false paths do not require a manifest.
+
+Before → after:
+
+```diff
+ from .client import Client
+ from .errors import GruffError
+
++__all__ = ["Client", "GruffError"]
+```
+
 ### `final-constants` (GR004)
 
 Flags simple-name assignments when an uppercase name and a `Final` annotation do not appear together. The rule applies in module, class, and function scopes, including nested control flow. Enum members, type aliases, chained and unpacking assignments, augmented assignments, loop and context-manager targets, attributes, subscripts, and imports are excluded.
@@ -80,6 +95,12 @@ def _render(*, value: float, unit: str = ""):  # noqa: GR002 -- optional suffix
 EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling
 ```
 
+For a dynamic package manifest, suppress GR003 on the reported public binding and state why deterministic source analysis does not apply:
+
+```python
+public = load_exports()  # noqa: GR003 -- exec() defines __all__ below
+```
+
 Prefer an inline suppression because it keeps the exception next to its reason. For files made entirely of protocol implementations, use a per-file ignore instead.
 
 ## Interface
@@ -90,8 +111,9 @@ Gruff will follow Ruff's familiar command and diagnostic conventions:
 gruff check .
 gruff check --select GR001 .
 gruff check --select GR002 .
+gruff check --select GR003 .
 gruff check --select GR004 .
-gruff check --select GR001,GR002,GR004 .
+gruff check --select GR001,GR002,GR003,GR004 .
 ```
 
 Lint findings, including invalid Python syntax, will exit with status 1. Configuration, I/O, and internal failures will exit with status 2.
@@ -104,7 +126,7 @@ Gruff reads configuration only from `pyproject.toml`:
 
 ```toml
 [tool.gruff.lint]
-select = ["GR001", "GR002", "GR004"]
+select = ["GR001", "GR002", "GR003", "GR004"]
 ignore = []
 per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
