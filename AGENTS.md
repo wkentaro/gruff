@@ -1,5 +1,9 @@
 ## Agent skills
 
+### Changelog
+
+Record user-facing changes as Towncrier fragments, following `changelog.d/README.md`; never edit `CHANGELOG.md` directly.
+
 ### Issue tracker
 
 Issues and specs live in this repository's GitHub Issues. See `docs/agents/issue-tracker.md`.
