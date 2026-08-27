@@ -18,7 +18,7 @@ Use exactly one type label: `type: bug` for defects, `type: feature` for new cap
 
 A draft PR is still being built. A non-draft PR without a verdict is ready for an agent to finalize. A PR waiting on an outside human uses `needs-info`.
 
-Once finalized, a PR carries exactly one verdict:
+Once finalized, a PR carries exactly one agent verdict:
 
 | Verdict | Meaning |
 | --- | --- |
@@ -26,4 +26,6 @@ Once finalized, a PR carries exactly one verdict:
 | `recommend-close` | The agent actively recommends closing it because of a named technical, scope, abandonment, or supersession reason |
 | `recommend-triage` | The code is sound, but a maintainer must make the product or scope decision |
 
-Verdicts are recommendations: agents do not merge or close PRs. A new commit makes an existing verdict stale; remove it and re-review the new diff before applying another verdict.
+`maintainer-approved` is a separate, human-only verdict: it records that a maintainer reviewed this head and approves merging after required checks pass. Apply it only at the maintainer's explicit direction. It may coexist with an agent verdict because the labels record decisions by different authorities.
+
+Verdicts record decisions, not merge or close actions; agents do not merge or close PRs, and required checks remain authoritative. A new commit makes either authority's verdict stale; remove it and have that authority review the new diff before renewing it.
