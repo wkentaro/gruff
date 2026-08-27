@@ -30,6 +30,7 @@ fn describes_check_options() {
         )
     );
     assert!(stdout.contains("Path to a pyproject.toml configuration file"));
+    assert!(stdout.contains("Output serialization format for findings"));
     assert!(output.stderr.is_empty());
 }
 
@@ -207,6 +208,7 @@ fn checks_hidden_files_once() {
             .count(),
         2
     );
+    assert!(String::from_utf8_lossy(&output.stdout).ends_with("Found 2 findings.\n"));
 
     let output = Command::new(env!("CARGO_BIN_EXE_ruffhouse"))
         .args([
