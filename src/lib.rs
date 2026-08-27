@@ -44,6 +44,11 @@ const RULES: &[Rule] = &[
         check: rules::required_private_inputs::check,
     },
     Rule {
+        code: rules::package_dunder_all::CODE,
+        name: rules::package_dunder_all::NAME,
+        check: rules::package_dunder_all::check,
+    },
+    Rule {
         code: rules::final_constants::CODE,
         name: rules::final_constants::NAME,
         check: rules::final_constants::check,

@@ -115,6 +115,359 @@ fn checks_required_private_inputs_selection_and_suppression() {
 }
 
 #[test]
+fn checks_package_dunder_all_findings_locations_output_and_exit_status() {
+    let directory = create_temp_directory("package-dunder-all-findings");
+    let sources = [
+        (
+            "aggregator/__init__.py",
+            "from .api import Public as Public\nother = 1\n",
+        ),
+        (
+            "definitions/__init__.py",
+            "def public():\n    ...\nclass Other:\n    ...\n",
+        ),
+        ("class-only/__init__.py", "class Public:\n    ...\n"),
+        (
+            "decorator-binding/__init__.py",
+            "@(public_decorator := identity)\ndef _private():\n    ...\n",
+        ),
+        (
+            "default-binding/__init__.py",
+            "def _private(value=(public_default := 1)):\n    ...\n",
+        ),
+        (
+            "lambda-default-binding/__init__.py",
+            "_callable = lambda value=(public_default := 1): value\n",
+        ),
+        (
+            "base-binding/__init__.py",
+            "class _Private((public_base := object)):\n    ...\n",
+        ),
+        (
+            "deleted-all/__init__.py",
+            "public = 1\n__all__ = []\ndel __all__\n",
+        ),
+        ("destructuring/__init__.py", "left, right = _values\n"),
+        (
+            "for-target/__init__.py",
+            "for loop_public in _values:\n    break\n",
+        ),
+        (
+            "match-target/__init__.py",
+            "match _value:\n    case match_public:\n        pass\n",
+        ),
+        (
+            "match-failed-guard/__init__.py",
+            "match _value:\n    case guarded_public if False:\n        pass\n",
+        ),
+        (
+            "path/__init__.py",
+            "if condition:\n    public = 1\n    __all__ = []\nelse:\n    alternate = 1\n",
+        ),
+        ("stub/__init__.pyi", "declared: int\n"),
+        ("type-alias/__init__.py", "type Public = int\n"),
+        (
+            "target-expression/__init__.py",
+            "_holder[(public := 1)] = 0\n",
+        ),
+        (
+            "unrelated-type-checking/__init__.py",
+            "from .config import flags as _flags\nif _flags.TYPE_CHECKING:\n    public = 1\n",
+        ),
+        (
+            "relative-type-checking/__init__.py",
+            "from .typing import TYPE_CHECKING as _TYPE_CHECKING\nif _TYPE_CHECKING:\n    public = 1\n",
+        ),
+        (
+            "bare-handler/__init__.py",
+            "try:\n    raise UnknownError\nexcept:\n    public = 1\n",
+        ),
+        (
+            "handler-type-binding/__init__.py",
+            "try:\n    raise RuntimeError\nexcept (public := RuntimeError):\n    pass\n",
+        ),
+        (
+            "try-handler/__init__.py",
+            "try:\n    raise Error\nexcept Error as error:\n    handler_public = 1\n",
+        ),
+        (
+            "while-target/__init__.py",
+            "while condition:\n    while_public = 1\n    break\n",
+        ),
+        (
+            "with-target/__init__.py",
+            "with _manager() as context_public:\n    pass\n",
+        ),
+        (
+            "finally-binding/__init__.py",
+            "try:\n    pass\nfinally:\n    finalized = 1\n",
+        ),
+    ];
+    for (relative_path, source) in sources {
+        let path = directory.join(relative_path);
+        fs::create_dir_all(path.parent().unwrap()).expect("package should be created");
+        fs::write(path, source).expect("package initializer should be written");
+    }
+    fs::write(directory.join("ordinary.py"), "public = 1\n")
+        .expect("ordinary module should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR003",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), sources.len());
+    for finding in findings.as_array().unwrap() {
+        assert_eq!(finding["code"], "GR003");
+        assert_eq!(finding["name"], "package-dunder-all");
+        assert_eq!(
+            finding["message"],
+            "Package initializer with public bindings must define __all__ on every import path"
+        );
+        assert_eq!(finding["severity"], "error");
+    }
+    let aggregator = findings
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|finding| {
+            finding["filename"]
+                .as_str()
+                .unwrap()
+                .ends_with("aggregator/__init__.py")
+        })
+        .unwrap();
+    assert_eq!(aggregator["location"]["row"], 1);
+    assert_eq!(aggregator["location"]["column"], 28);
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn allows_package_dunder_all_safe_completion_paths() {
+    let directory = create_temp_directory("package-dunder-all-allowed");
+    let sources = [
+        ("empty/__init__.py", ""),
+        ("assert-false/__init__.py", "assert False\npublic = 1\n"),
+        (
+            "future-only/__init__.py",
+            "from __future__ import annotations\n",
+        ),
+        (
+            "private/__init__.py",
+            "__version__ = \"1\"\n_private = 1\ndeclared: int\n",
+        ),
+        (
+            "direct/__init__.py",
+            "public = 1\n__all__: list[str] = []\n",
+        ),
+        (
+            "imported/__init__.py",
+            "from .exports import __all__ as __all__\nfrom .api import public\n",
+        ),
+        (
+            "function-manifest/__init__.py",
+            "public = 1\ndef __all__():\n    ...\n",
+        ),
+        (
+            "destructured-manifest/__init__.py",
+            "public = 1\n__all__, _metadata = [], None\n",
+        ),
+        ("deleted/__init__.py", "temporary = 1\ndel temporary\n"),
+        (
+            "conditional/__init__.py",
+            "if condition:\n    public = 1\n    __all__ = []\n",
+        ),
+        (
+            "branches/__init__.py",
+            "if condition:\n    public = 1\n    __all__ = []\nelse:\n    alternate = 1\n    __all__ = []\n",
+        ),
+        (
+            "static/__init__.py",
+            "import typing as _typing\nfrom typing_extensions import TYPE_CHECKING as _TYPE_CHECKING\nif TYPE_CHECKING:\n    typed = 1\nif _typing.TYPE_CHECKING:\n    qualified = 1\nif _TYPE_CHECKING:\n    aliased = 1\nif False:\n    disabled = 1\n",
+        ),
+        (
+            "exception/__init__.py",
+            "try:\n    raise Error\nexcept Error as error:\n    pass\n",
+        ),
+        (
+            "incompatible-handler/__init__.py",
+            "try:\n    raise ValueError\nexcept TypeError:\n    public = 1\n",
+        ),
+        (
+            "qualified-incompatible-handler/__init__.py",
+            "class _First:\n    class Error(Exception):\n        pass\nclass _Second:\n    class Error(Exception):\n        pass\ntry:\n    raise _First.Error\nexcept _Second.Error:\n    public = 1\n",
+        ),
+        (
+            "call-qualified-handler/__init__.py",
+            "class _Other:\n    Error = TypeError\nclass _Errors:\n    class Error(Exception):\n        pass\n    def __new__(cls):\n        return _Other()\ntry:\n    raise _Errors.Error\nexcept _Errors().Error:\n    public = 1\n",
+        ),
+        (
+            "correlated/__init__.py",
+            "if condition:\n    __all__ = []\nif condition:\n    public = 1\n",
+        ),
+        (
+            "unreachable-match/__init__.py",
+            "match _value:\n    case _ if True:\n        __all__ = []\n    case _ if True:\n        public = 1\n",
+        ),
+        ("invalid-augmented/__init__.py", "public += (public := 1)\n"),
+        (
+            "literal-true/__init__.py",
+            "if True:\n    __all__ = []\nelse:\n    pass\npublic = 1\n",
+        ),
+        (
+            "controls/__init__.py",
+            "for loop_public in _values:\n    __all__ = []\nwith _manager() as context_public:\n    __all__ = []\nmatch _value:\n    case match_public:\n        __all__ = []\nwhile True:\n    while_public = 1\n    __all__ = []\n    break\n",
+        ),
+        (
+            "nested/__init__.py",
+            "def _factory():\n    public = 1\nclass _Holder:\n    public = 1\n",
+        ),
+    ];
+    for (relative_path, source) in sources {
+        let path = directory.join(relative_path);
+        fs::create_dir_all(path.parent().unwrap()).expect("package should be created");
+        fs::write(path, source).expect("package initializer should be written");
+    }
+    fs::write(directory.join("ordinary.py"), "public = 1\n")
+        .expect("ordinary module should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR003",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"[]\n");
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn supports_package_dunder_all_selection_and_suppression() {
+    let directory = create_temp_directory("package-dunder-all-suppression");
+    for name in ["inline", "ignored"] {
+        fs::create_dir(directory.join(name)).expect("package should be created");
+    }
+    fs::write(
+        directory.join("inline/__init__.py"),
+        "public = 1  # noqa: GR003 -- generated dynamically\n",
+    )
+    .expect("suppressed initializer should be written");
+    fs::write(directory.join("ignored/__init__.py"), "PUBLIC = 1\n")
+        .expect("ignored initializer should be written");
+    fs::write(
+        directory.join("pyproject.toml"),
+        "[tool.gruff.lint]\nselect = [\"GR003\", \"GR004\"]\nper-file-ignores = { \"ignored/__init__.py\" = [\"GR003\"] }\n",
+    )
+    .expect("configuration should be written");
+
+    let configured = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--output-format", "json", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    assert_eq!(configured.status.code(), Some(1));
+    let findings: Value =
+        serde_json::from_slice(&configured.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 1);
+    assert_eq!(findings[0]["code"], "GR004");
+
+    let disabled = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--isolated", "--output-format", "json", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    assert!(disabled.status.success());
+    assert_eq!(disabled.stdout, b"[]\n");
+    assert!(String::from_utf8_lossy(&disabled.stderr).contains("No rules are enabled"));
+
+    let selected = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR003",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    assert_eq!(selected.status.code(), Some(1));
+    let findings: Value = serde_json::from_slice(&selected.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 1);
+    assert_eq!(findings[0]["code"], "GR003");
+    assert!(
+        findings[0]["filename"]
+            .as_str()
+            .unwrap()
+            .ends_with("ignored/__init__.py")
+    );
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn bounds_package_dunder_all_branch_analysis_without_speculation() {
+    let directory = create_temp_directory("package-dunder-all-bounded");
+    let package = directory.join("package");
+    fs::create_dir(&package).expect("package should be created");
+    let mut source = String::new();
+    for index in 0..200 {
+        source.push_str(&format!(
+            "if condition_{index}:\n    _private_{index} = 1\n"
+        ));
+    }
+    source.push_str("if final_condition:\n    __all__ = []\nelse:\n    public = 1\n");
+    fs::write(package.join("__init__.py"), source)
+        .expect("branch-heavy initializer should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR003",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"[]\n");
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn checks_final_constants_findings_locations_formats_and_exit_status() {
     let directory = create_temp_directory("final-constants-findings");
     let path = directory.join("findings.py");
