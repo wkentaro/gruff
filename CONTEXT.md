@@ -1,11 +1,11 @@
-# Ruffhouse
+# Gruff
 
-Ruffhouse provides deterministic Python policies that complement Ruff and reduce the review cost of agent-assisted code.
+Gruff provides deterministic Python policies that complement Ruff and reduce the review cost of agent-assisted code.
 
 ## Language
 
 **Rule**:
-A deterministic source-code policy identified by a stable `RH` code.
+A deterministic source-code policy identified by a stable `GR` code.
 _Avoid_: Check, heuristic
 
 **Finding**:

@@ -3,7 +3,7 @@ use ruff_python_ast::StmtFunctionDef;
 use super::Diagnostic;
 use crate::analysis::classify_private_inputs;
 
-pub(crate) const CODE: &str = "RH001";
+pub(crate) const CODE: &str = "GR001";
 pub(crate) const NAME: &str = "keyword-only-private-inputs";
 
 pub(crate) fn check(definition: &StmtFunctionDef, is_method: bool) -> Vec<Diagnostic> {

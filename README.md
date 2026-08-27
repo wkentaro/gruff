@@ -1,14 +1,14 @@
-# Ruffhouse
+# Gruff
 
-Ruffhouse is an opinionated, deterministic maintainability linter for Python. It complements Ruff with project policies that make agent-assisted code easier to understand and review; it does not infer who or what wrote the code.
+Gruff is an opinionated, deterministic maintainability linter for Python. It complements Ruff with project policies that make agent-assisted code easier to understand and review; it does not infer who or what wrote the code.
 
 The first release tests two theses: private inputs are easier to trace when callers name them, and private behavior is easier to review when callers supply every value.
 
-RH001 and RH002 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+GR001 and GR002 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
 ## Recommended Ruff pairing
 
-Ruffhouse does not duplicate checks that Ruff already provides. Enable Ruff's `ARG` rules to flag unused function and method arguments, including arguments on private definitions:
+Gruff does not duplicate checks that Ruff already provides. Enable Ruff's `ARG` rules to flag unused function and method arguments, including arguments on private definitions:
 
 ```toml
 [tool.ruff.lint]
@@ -17,7 +17,7 @@ extend-select = ["ARG"]
 
 ## Rules
 
-### `keyword-only-private-inputs` (RH001)
+### `keyword-only-private-inputs` (GR001)
 
 Flags each fixed caller-supplied input to a private module-level function or method that is positional; implicit method receivers and variadic parameters are excluded.
 
@@ -33,7 +33,7 @@ Before → after:
 +    return _resize_image(data=data, width=512)
 ```
 
-### `required-private-inputs` (RH002)
+### `required-private-inputs` (GR002)
 
 Flags each fixed caller-supplied input to a private module-level function or method that has a default; implicit method receivers and variadic parameters are excluded.
 
@@ -54,11 +54,11 @@ Before → after:
 Suppress a rule on definitions that must follow an external calling convention or intentionally provide a convenience default:
 
 ```python
-def _format_cost(value: float) -> str:  # noqa: RH001 -- Callable[[float], str]
+def _format_cost(value: float) -> str:  # noqa: GR001 -- Callable[[float], str]
     return f"${value:.2f}"
 
 
-def _render(*, value: float, unit: str = ""):  # noqa: RH002 -- optional suffix
+def _render(*, value: float, unit: str = ""):  # noqa: GR002 -- optional suffix
     return f"{value}{unit}"
 ```
 
@@ -66,32 +66,32 @@ Prefer an inline suppression because it keeps the exception next to its reason. 
 
 ## Interface
 
-Ruffhouse will follow Ruff's familiar command and diagnostic conventions:
+Gruff will follow Ruff's familiar command and diagnostic conventions:
 
 ```console
-ruffhouse check .
-ruffhouse check --select RH001 .
-ruffhouse check --select RH002 .
-ruffhouse check --select RH001,RH002 .
+gruff check .
+gruff check --select GR001 .
+gruff check --select GR002 .
+gruff check --select GR001,GR002 .
 ```
 
 Lint findings, including invalid Python syntax, will exit with status 1. Configuration, I/O, and internal failures will exit with status 2.
 
-Ruffhouse does not rewrite source code in the first release.
+Gruff does not rewrite source code in the first release.
 
 ## Configuration
 
-Ruffhouse reads configuration only from `pyproject.toml`:
+Gruff reads configuration only from `pyproject.toml`:
 
 ```toml
-[tool.ruffhouse.lint]
-select = ["RH001", "RH002"]
+[tool.gruff.lint]
+select = ["GR001", "GR002"]
 ignore = []
-per-file-ignores = { "callbacks.py" = ["RH001"] }
+per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
 
 Directory discovery checks `.py`, `.pyi`, and `.pyw` files and respects Git ignore files.
 
 ## Distribution
 
-Public releases will use PyPI wheels for Linux x86_64 and aarch64, macOS x86_64 and arm64, and Windows x86_64. Ruffhouse is not published to crates.io.
+Public releases will use PyPI wheels for Linux x86_64 and aarch64, macOS x86_64 and arm64, and Windows x86_64. Gruff is not published to crates.io.
