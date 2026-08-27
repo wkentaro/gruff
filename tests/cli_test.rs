@@ -115,6 +115,178 @@ fn checks_required_private_inputs_selection_and_suppression() {
 }
 
 #[test]
+fn checks_final_constants_findings_locations_formats_and_exit_status() {
+    let directory = create_temp_directory("final-constants-findings");
+    let path = directory.join("findings.py");
+    fs::write(
+        &path,
+        r#"MODULE = 1
+class Settings:
+    CLASS_VALUE: int = 2
+    if True:
+        NESTED_CLASS = 3
+def build():
+    FUNCTION_VALUE = 4
+    if True:
+        variable: Final = 5
+_PRIVATE = 6
+DECLARATION: int
+qualified: typing.Final[int] = 7
+"#,
+    )
+    .expect("finding source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR004",
+            "--output-format",
+            "json",
+            path.to_str().unwrap(),
+        ])
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    let expected = [
+        (1, 1, "Constant MODULE must be annotated Final"),
+        (3, 5, "Constant CLASS_VALUE must be annotated Final"),
+        (5, 9, "Constant NESTED_CLASS must be annotated Final"),
+        (7, 5, "Constant FUNCTION_VALUE must be annotated Final"),
+        (
+            9,
+            9,
+            "Final binding variable must be named in UPPER_SNAKE_CASE",
+        ),
+        (10, 1, "Constant _PRIVATE must be annotated Final"),
+        (11, 1, "Constant DECLARATION must be annotated Final"),
+        (
+            12,
+            1,
+            "Final binding qualified must be named in UPPER_SNAKE_CASE",
+        ),
+    ];
+    assert_eq!(findings.as_array().unwrap().len(), expected.len());
+    for (finding, (row, column, message)) in findings.as_array().unwrap().iter().zip(expected) {
+        assert_eq!(finding["code"], "GR004");
+        assert_eq!(finding["name"], "final-constants");
+        assert_eq!(finding["location"]["row"], row);
+        assert_eq!(finding["location"]["column"], column);
+        assert_eq!(finding["message"], message);
+        assert_eq!(finding["severity"], "error");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR004",
+            "--output-format",
+            "github",
+            path.to_str().unwrap(),
+        ])
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("line=1,col=1,endLine=1,endColumn=7"));
+    assert!(stdout.contains("GR004 Constant MODULE must be annotated Final"));
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn allows_final_constants_canonical_and_out_of_scope_bindings() {
+    let directory = create_temp_directory("final-constants-allowed");
+    fs::write(
+        directory.join("allowed.py"),
+        r#"from typing import Final, TypeAlias
+import enum
+import typing
+PUBLIC: Final = 1
+_PRIVATE: typing.Final[int] = 2
+__PRIVATE_2: Final[str] = "value"
+ALIAS: TypeAlias = int
+QUALIFIED_ALIAS: typing.TypeAlias = str
+type RESPONSE = bytes
+if True:
+    CONTROL_FLOW: Final = 3
+class Settings:
+    CLASS_VALUE: Final = 4
+    if True:
+        NESTED_CLASS: Final = 5
+def build():
+    FUNCTION_VALUE: Final = 6
+    if True:
+        NESTED_FUNCTION: Final = 7
+class Color(Enum):
+    RED = 1
+    label: Final = "red"
+    if True:
+        BLUE = 2
+class Number(enum.IntEnum):
+    ONE = 1
+class Text(enum.StrEnum):
+    VALUE = "value"
+class Repr(enum.ReprEnum):
+    VALUE = 1
+class Bits(enum.Flag):
+    ONE = 1
+class IntBits(enum.IntFlag):
+    ONE = 1
+CHAINED = OTHER = 1
+LEFT, RIGHT = (1, 2)
+AUGMENTED += 1
+for ITEM in items:
+    pass
+with manager() as RESOURCE:
+    pass
+target.ATTRIBUTE = 1
+items[0] = 1
+target.ANNOTATED: Final = 1
+items[0]: Final = 1
+import module as IMPORTED
+from module import value as IMPORTED_VALUE
+SUPPRESSED = 1  # noqa: GR004 -- external spelling
+suppressed_variable: Final = 1  # noqa: GR004 -- framework state
+"#,
+    )
+    .expect("allowed source should be written");
+    fs::write(
+        directory.join("allowed.pyi"),
+        "from typing import Final\nSTUB_VALUE: Final\n_PRIVATE_STUB: Final[int]\n",
+    )
+    .expect("stub source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR004",
+            "--output-format",
+            "concise",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"All checks passed!\n");
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn follows_ruff_selector_specificity() {
     let directory = create_temp_directory("selectors");
     let path = directory.join("finding.py");

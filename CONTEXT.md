@@ -24,6 +24,10 @@ _Avoid_: Private kwargs, named private inputs
 A policy requiring every non-receiver, non-variadic input to a private definition to have no default, so callers supply each value.
 _Avoid_: No private defaults, explicit private inputs
 
+**Final constants**:
+A policy requiring every simple-name constant binding to pair an uppercase name with a `Final` annotation in every lexical scope.
+_Avoid_: Uppercase variables, final variables
+
 **Review miner**:
 A development tool that extracts candidate review episodes from local Codex and Claude histories for agent and human evaluation of possible rules. Its output is temporary evidence, never a rule or finding.
 _Avoid_: Linter, detector

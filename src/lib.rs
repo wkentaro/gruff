@@ -14,7 +14,7 @@ use clap::ValueEnum;
 use globset::Glob;
 use globset::GlobMatcher;
 use ignore::WalkBuilder;
-use ruff_python_ast::StmtFunctionDef;
+use ruff_python_ast::Stmt;
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::token::Tokens;
 use ruff_python_parser::parse_module;
@@ -29,7 +29,7 @@ mod rules;
 struct Rule {
     code: &'static str,
     name: &'static str,
-    check: fn(&StmtFunctionDef, bool) -> Vec<rules::Diagnostic>,
+    check: fn(&[Stmt]) -> Vec<rules::Diagnostic>,
 }
 
 const RULES: &[Rule] = &[
@@ -42,6 +42,11 @@ const RULES: &[Rule] = &[
         code: rules::required_private_inputs::CODE,
         name: rules::required_private_inputs::NAME,
         check: rules::required_private_inputs::check,
+    },
+    Rule {
+        code: rules::final_constants::CODE,
+        name: rules::final_constants::NAME,
+        check: rules::final_constants::check,
     },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
@@ -589,22 +594,20 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
     };
     let mut findings = Vec::new();
 
-    for (definition, is_method) in analysis::find_private_definitions(parsed.suite()) {
-        let noqa_row = find_noqa_row(source, parsed.tokens(), definition.name.range);
-        for rule in RULES {
+    for rule in RULES {
+        for diagnostic in (rule.check)(parsed.suite()) {
+            let noqa_row = find_noqa_row(source, parsed.tokens(), diagnostic.range);
             if has_noqa(source, parsed.tokens(), noqa_row, rule.code) {
                 continue;
             }
-            for diagnostic in (rule.check)(definition, is_method) {
-                findings.push(make_finding(
-                    path,
-                    rule.code,
-                    diagnostic.message,
-                    diagnostic.range,
-                    source,
-                    Some(noqa_row),
-                ));
-            }
+            findings.push(make_finding(
+                path,
+                rule.code,
+                diagnostic.message,
+                diagnostic.range,
+                source,
+                Some(noqa_row),
+            ));
         }
     }
 

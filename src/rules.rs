@@ -1,3 +1,4 @@
+pub(crate) mod final_constants;
 pub(crate) mod keyword_only_private_inputs;
 pub(crate) mod required_private_inputs;
 

@@ -1,0 +1,3 @@
+# Enforce final constants
+
+GR004 flags simple-name assignments whose uppercase spelling and `Final` annotation do not appear together. The pairing applies in module, class, and function scopes, including nested control flow, while enum members, type aliases, and non-simple assignment forms are excluded. The 2026-08-27 specification sweep found 119 uppercase bindings without `Final` and 6 `Final` bindings without uppercase names across the six reference repositories. The rule uses syntax only, without import-alias resolution or dataflow, and remains opt-in while repository trials establish that one constant spelling reliably reduces review work.

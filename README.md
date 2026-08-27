@@ -2,9 +2,9 @@
 
 Gruff is an opinionated, deterministic maintainability linter for Python. It complements Ruff with project policies that make agent-assisted code easier to understand and review; it does not infer who or what wrote the code.
 
-The first release tests two theses: private inputs are easier to trace when callers name them, and private behavior is easier to review when callers supply every value.
+The first release tests three theses: private inputs are easier to trace when callers name them, private behavior is easier to review when callers supply every value, and constants are easier to review when uppercase names and `Final` annotations always appear together.
 
-GR001 and GR002 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+GR001, GR002, and GR004 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
 ## Recommended Ruff pairing
 
@@ -49,6 +49,21 @@ Before → after:
 +    return _resize_image(data=data, width=512)
 ```
 
+### `final-constants` (GR004)
+
+Flags simple-name assignments when an uppercase name and a `Final` annotation do not appear together. The rule applies in module, class, and function scopes, including nested control flow. Enum members, type aliases, chained and unpacking assignments, augmented assignments, loop and context-manager targets, attributes, subscripts, and imports are excluded.
+
+Before → after:
+
+```diff
+ from typing import Final
+
+-THUMBNAIL_WIDTH = 512
+-image_format: Final = "png"
++THUMBNAIL_WIDTH: Final = 512
++IMAGE_FORMAT: Final = "png"
+```
+
 ### Exceptions
 
 Suppress a rule on definitions that must follow an external calling convention or intentionally provide a convenience default:
@@ -60,6 +75,9 @@ def _format_cost(value: float) -> str:  # noqa: GR001 -- Callable[[float], str]
 
 def _render(*, value: float, unit: str = ""):  # noqa: GR002 -- optional suffix
     return f"{value}{unit}"
+
+
+EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling
 ```
 
 Prefer an inline suppression because it keeps the exception next to its reason. For files made entirely of protocol implementations, use a per-file ignore instead.
@@ -72,7 +90,8 @@ Gruff will follow Ruff's familiar command and diagnostic conventions:
 gruff check .
 gruff check --select GR001 .
 gruff check --select GR002 .
-gruff check --select GR001,GR002 .
+gruff check --select GR004 .
+gruff check --select GR001,GR002,GR004 .
 ```
 
 Lint findings, including invalid Python syntax, will exit with status 1. Configuration, I/O, and internal failures will exit with status 2.
@@ -85,7 +104,7 @@ Gruff reads configuration only from `pyproject.toml`:
 
 ```toml
 [tool.gruff.lint]
-select = ["GR001", "GR002"]
+select = ["GR001", "GR002", "GR004"]
 ignore = []
 per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
