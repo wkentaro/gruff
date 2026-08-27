@@ -1,32 +1,23 @@
-name: CI and release
+name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*"
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - name: Check tag version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: test "v$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')" = "$GITHUB_REF_NAME"
-      - run: cargo fmt --all -- --check
-      - run: cargo test --all-targets --locked
-      - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+  lint:
+    uses: ./.github/workflows/lint.yml
+
+  test:
+    uses: ./.github/workflows/test.yml
 
   linux:
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    needs: check
+    needs: [lint, test]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -55,8 +46,7 @@ jobs:
           path: dist
 
   macos:
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    needs: check
+    needs: [lint, test]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -79,8 +69,7 @@ jobs:
           path: dist
 
   windows:
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    needs: check
+    needs: [lint, test]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
