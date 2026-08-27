@@ -8,7 +8,7 @@ All rules are opt-in. Teams enable policies one at a time as they decide which o
 
 ## Installation
 
-Requires Python 3.7 or later.
+Requires Python 3.10 or later.
 
 ```bash
 pip install gruff
