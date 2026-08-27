@@ -8,9 +8,31 @@ All rules are opt-in. Teams enable policies one at a time as they decide which o
 
 ## Installation
 
-```console
+Requires Python 3.7 or later.
+
+```bash
 pip install gruff
 ```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv tool install gruff
+```
+
+Verify it works:
+
+```bash
+gruff --version
+```
+
+> [!TIP]
+> To try the latest development version (the head of `main` on GitHub) before
+> it is published:
+>
+> ```bash
+> uv tool install git+https://github.com/wkentaro/gruff
+> ```
 
 ## Rules
 
