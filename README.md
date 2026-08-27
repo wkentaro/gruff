@@ -49,6 +49,21 @@ Before → after:
 +    return _resize_image(data=data, width=512)
 ```
 
+### Exceptions
+
+Suppress a rule on definitions that must follow an external calling convention or intentionally provide a convenience default:
+
+```python
+def _format_cost(value: float) -> str:  # noqa: RH001 -- Callable[[float], str]
+    return f"${value:.2f}"
+
+
+def _render(*, value: float, unit: str = ""):  # noqa: RH002 -- optional suffix
+    return f"{value}{unit}"
+```
+
+Prefer an inline suppression because it keeps the exception next to its reason. For files made entirely of protocol implementations, use a per-file ignore instead.
+
 ## Interface
 
 Ruffhouse will follow Ruff's familiar command and diagnostic conventions:
@@ -72,6 +87,7 @@ Ruffhouse reads configuration only from `pyproject.toml`:
 [tool.ruffhouse.lint]
 select = ["RH001", "RH002"]
 ignore = []
+per-file-ignores = { "callbacks.py" = ["RH001"] }
 ```
 
 Directory discovery checks `.py`, `.pyi`, and `.pyw` files and respects Git ignore files.

@@ -111,7 +111,7 @@ struct CheckArguments {
     )]
     ignore: Option<Vec<String>>,
 
-    /// Output serialization format for violations
+    /// Output serialization format for findings
     #[arg(long, value_enum)]
     output_format: Option<OutputFormat>,
 
@@ -757,7 +757,7 @@ fn print_summary(writer: &mut impl Write, findings: &[Finding]) -> io::Result<()
     }
 
     let suffix = if findings.len() == 1 { "" } else { "s" };
-    writeln!(writer, "Found {} error{suffix}.", findings.len())
+    writeln!(writer, "Found {} finding{suffix}.", findings.len())
 }
 
 fn print_json(writer: &mut impl Write, findings: &[Finding]) -> io::Result<()> {
@@ -935,7 +935,7 @@ mod tests {
     fn suppresses_each_rule_independently() {
         let findings = check_source(
             Path::new("test.py"),
-            "def _load(\\\n    path=None):  # noqa: RH001\n    ...\n",
+            "def _load(\\\n    path=None):  # noqa: RH001 -- positional protocol\n    ...\n",
         );
 
         assert_eq!(findings.len(), 1);
