@@ -29,7 +29,7 @@ mod rules;
 struct Rule {
     code: &'static str,
     name: &'static str,
-    check: fn(&[Stmt]) -> Vec<rules::Diagnostic>,
+    check: fn(&Path, &[Stmt]) -> Vec<rules::Diagnostic>,
 }
 
 const RULES: &[Rule] = &[
@@ -595,7 +595,7 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     for rule in RULES {
-        for diagnostic in (rule.check)(parsed.suite()) {
+        for diagnostic in (rule.check)(path, parsed.suite()) {
             let noqa_row = find_noqa_row(source, parsed.tokens(), diagnostic.range);
             if has_noqa(source, parsed.tokens(), noqa_row, rule.code) {
                 continue;

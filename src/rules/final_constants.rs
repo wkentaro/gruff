@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use ruff_python_ast::Expr;
 use ruff_python_ast::Stmt;
 use ruff_python_ast::StmtClassDef;
@@ -9,7 +11,7 @@ use super::Diagnostic;
 pub(crate) const CODE: &str = "GR004";
 pub(crate) const NAME: &str = "final-constants";
 
-pub(crate) fn check(statements: &[Stmt]) -> Vec<Diagnostic> {
+pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     let mut visitor = FinalConstantVisitor {
         is_enum_body: false,
         diagnostics: Vec::new(),
