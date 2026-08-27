@@ -2,7 +2,7 @@
 
 ### Changelog
 
-Record user-facing changes as Towncrier fragments, following `changelog.d/README.md`; never edit `CHANGELOG.md` directly.
+Record changes to released Gruff behavior as Towncrier fragments, following `changelog.d/README.md`; never edit `CHANGELOG.md` directly. Documentation-only changes, such as README reorganization, do not need fragments.
 
 ### Issue tracker
 
