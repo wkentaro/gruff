@@ -6,6 +6,15 @@ The first release tests two theses: private inputs are easier to trace when call
 
 RH001 and RH002 are opt-in while those theses are validated. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
+## Recommended Ruff pairing
+
+Ruffhouse does not duplicate checks that Ruff already provides. Enable Ruff's `ARG` rules to flag unused function and method arguments, including arguments on private definitions:
+
+```toml
+[tool.ruff.lint]
+extend-select = ["ARG"]
+```
+
 ## Rules
 
 ### `keyword-only-private-inputs` (RH001)
