@@ -295,6 +295,10 @@ fn allows_package_dunder_all_safe_completion_paths() {
             "if condition:\n    public = 1\n    __all__ = []\nelse:\n    alternate = 1\n    __all__ = []\n",
         ),
         (
+            "correlated-identity/__init__.py",
+            "_flag = get_value()\nif _flag is True:\n    public = 1\nif _flag is not True:\n    pass\nelse:\n    __all__ = []\n",
+        ),
+        (
             "static/__init__.py",
             "import typing as _typing\nfrom typing_extensions import TYPE_CHECKING as _TYPE_CHECKING\nif TYPE_CHECKING:\n    typed = 1\nif _typing.TYPE_CHECKING:\n    qualified = 1\nif _TYPE_CHECKING:\n    aliased = 1\nif False:\n    disabled = 1\n",
         ),
