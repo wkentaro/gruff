@@ -43,6 +43,11 @@ const RULES: &[Rule] = &[
         name: rules::required_private_inputs::NAME,
         check: rules::required_private_inputs::check,
     },
+    Rule {
+        code: rules::final_constants::CODE,
+        name: rules::final_constants::NAME,
+        check: rules::final_constants::check,
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",
