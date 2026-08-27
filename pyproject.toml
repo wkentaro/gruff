@@ -3,7 +3,7 @@ requires = ["maturin>=1.9.3,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "ruffhouse"
+name = "gruff"
 version = "0.0.1"
 description = "An opinionated deterministic maintainability linter for Python"
 readme = "README.md"
@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/wkentaro/ruffhouse"
+Repository = "https://github.com/wkentaro/gruff"
 
 [tool.maturin]
 bindings = "bin"

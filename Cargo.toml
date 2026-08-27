@@ -1,11 +1,11 @@
 [package]
-name = "ruffhouse"
+name = "gruff"
 version = "0.0.1"
 description = "An opinionated deterministic maintainability linter for Python"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
-repository = "https://github.com/wkentaro/ruffhouse"
+repository = "https://github.com/wkentaro/gruff"
 readme = "README.md"
 publish = false
 

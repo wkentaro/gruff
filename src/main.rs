@@ -3,12 +3,12 @@ use std::process::ExitCode;
 use clap::Parser;
 
 fn main() -> ExitCode {
-    let arguments = ruffhouse::Arguments::parse();
+    let arguments = gruff::Arguments::parse();
 
-    match ruffhouse::run(arguments) {
+    match gruff::run(arguments) {
         Ok(code) => ExitCode::from(code),
         Err(error) => {
-            eprintln!("ruffhouse failed\n  Cause: {error}");
+            eprintln!("gruff failed\n  Cause: {error}");
             ExitCode::from(2)
         }
     }

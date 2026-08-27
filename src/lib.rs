@@ -73,7 +73,7 @@ const DEFAULT_EXCLUDES: &[&str] = &[
 ];
 
 #[derive(Debug, Parser)]
-#[command(name = "ruffhouse", version, about)]
+#[command(name = "gruff", version, about)]
 pub struct Arguments {
     #[command(subcommand)]
     command: Command,
@@ -81,7 +81,7 @@ pub struct Arguments {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Run Ruffhouse on the given files or directories
+    /// Run Gruff on the given files or directories
     Check(CheckArguments),
 }
 
@@ -162,7 +162,7 @@ struct Pyproject {
 
 #[derive(Debug, Default, Deserialize)]
 struct ToolTable {
-    ruffhouse: Option<RawConfig>,
+    gruff: Option<RawConfig>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -418,7 +418,7 @@ fn find_config(start: &Path) -> Result<Option<LoadedConfig>, RunError> {
             .map_err(|error| RunError(format!("Failed to read {}: {error}", path.display())))?;
         let document: Pyproject = toml::from_str(&source)
             .map_err(|error| RunError(format!("Failed to parse {}: {error}", path.display())))?;
-        if let Some(raw) = document.tool.ruffhouse {
+        if let Some(raw) = document.tool.gruff {
             return Ok(Some(load_raw_config(directory.to_path_buf(), raw)?));
         }
     }
@@ -431,12 +431,10 @@ fn load_config(path: &Path) -> Result<LoadedConfig, RunError> {
         .map_err(|error| RunError(format!("Failed to read {}: {error}", path.display())))?;
     let document: Pyproject = toml::from_str(&source)
         .map_err(|error| RunError(format!("Failed to parse {}: {error}", path.display())))?;
-    let raw = document.tool.ruffhouse.ok_or_else(|| {
-        RunError(format!(
-            "{} does not contain [tool.ruffhouse]",
-            path.display()
-        ))
-    })?;
+    let raw = document
+        .tool
+        .gruff
+        .ok_or_else(|| RunError(format!("{} does not contain [tool.gruff]", path.display())))?;
     let root = std::env::current_dir()
         .map_err(|error| RunError(format!("Failed to read current directory: {error}")))?;
     load_raw_config(root, raw)
@@ -795,7 +793,7 @@ fn print_github(writer: &mut impl Write, findings: &[Finding]) -> io::Result<()>
         if finding.location.row == finding.end_location.row {
             write!(
                 writer,
-                "::error title=Ruffhouse ({}),file={},line={},col={},endLine={},endColumn={}::",
+                "::error title=Gruff ({}),file={},line={},col={},endLine={},endColumn={}::",
                 finding.code,
                 path,
                 finding.location.row,
@@ -806,7 +804,7 @@ fn print_github(writer: &mut impl Write, findings: &[Finding]) -> io::Result<()>
         } else {
             write!(
                 writer,
-                "::error title=Ruffhouse ({}),file={},line={},endLine={}::",
+                "::error title=Gruff ({}),file={},line={},endLine={}::",
                 finding.code, path, finding.location.row, finding.end_location.row
             )?;
         }
@@ -850,7 +848,7 @@ mod tests {
         );
 
         assert_eq!(findings.len(), 4);
-        assert_eq!(findings[0].code, "RH001");
+        assert_eq!(findings[0].code, "GR001");
         assert_eq!(
             findings[0].message,
             "Private input `data` must be keyword-only"
@@ -859,7 +857,7 @@ mod tests {
             findings[1].message,
             "Private input `width` must be keyword-only"
         );
-        assert_eq!(findings[2].code, "RH002");
+        assert_eq!(findings[2].code, "GR002");
         assert_eq!(
             findings[2].message,
             "Private input `width` must be required"
@@ -872,8 +870,8 @@ mod tests {
         let findings = check_source(Path::new("test.py"), "def _f(width=512):\n    ...\n");
 
         assert_eq!(findings.len(), 2);
-        assert_eq!(findings[0].code, "RH001");
-        assert_eq!(findings[1].code, "RH002");
+        assert_eq!(findings[0].code, "GR001");
+        assert_eq!(findings[1].code, "GR002");
         assert_eq!(findings[0].location.row, 1);
         assert_eq!(findings[0].location.column, 8);
         assert_eq!(findings[0].location, findings[1].location);
@@ -891,9 +889,9 @@ mod tests {
         ];
         for source in keyword_only_violations {
             assert_eq!(
-                check_rule(source, "RH001").len(),
+                check_rule(source, "GR001").len(),
                 1,
-                "expected RH001 for {source}"
+                "expected GR001 for {source}"
             );
         }
 
@@ -904,9 +902,9 @@ mod tests {
         ];
         for source in required_violations {
             assert_eq!(
-                check_rule(source, "RH002").len(),
+                check_rule(source, "GR002").len(),
                 1,
-                "expected RH002 for {source}"
+                "expected GR002 for {source}"
             );
         }
 
@@ -935,11 +933,11 @@ mod tests {
     fn suppresses_each_rule_independently() {
         let findings = check_source(
             Path::new("test.py"),
-            "def _load(\\\n    path=None):  # noqa: RH001 -- positional protocol\n    ...\n",
+            "def _load(\\\n    path=None):  # noqa: GR001 -- positional protocol\n    ...\n",
         );
 
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "RH002");
+        assert_eq!(findings[0].code, "GR002");
         assert_eq!(findings[0].noqa_row, Some(2));
     }
 
