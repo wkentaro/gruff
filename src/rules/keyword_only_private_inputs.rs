@@ -15,7 +15,7 @@ pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
         .flat_map(|(definition, is_method)| {
             classify_private_inputs(definition, is_method)
                 .into_iter()
-                .filter(|input| !input.is_keyword_only)
+                .filter(|input| input.is_positional_or_keyword)
                 .map(|input| Diagnostic {
                     message: format!("Private input `{}` must be keyword-only", input.name),
                     range: input.range,

@@ -49,11 +49,11 @@ All rules are opt-in. Use an exact code such as `GR001` to adopt rules individua
 
 ## Rules at a glance
 
-The first release tests four theses: private inputs are easier to trace when callers name them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
+The first release tests four theses: private inputs are easier to trace when definitions declare how callers pass them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
-| GR001 | [`keyword-only-private-inputs`](#keyword-only-private-inputs-gr001) | Callers name every fixed input to private callables. |
+| GR001 | [`keyword-only-private-inputs`](#keyword-only-private-inputs-gr001) | Every fixed private input has an explicit calling convention. |
 | GR002 | [`required-private-inputs`](#required-private-inputs-gr002) | Callers supply every fixed input to private callables. |
 | GR003 | [`package-dunder-all`](#package-dunder-all-gr003) | Every public package import path defines `__all__`. |
 | GR004 | [`final-constants`](#final-constants-gr004) | Uppercase names and `Final` annotations appear together. |
@@ -93,18 +93,17 @@ Lint findings, including invalid Python syntax, exit with status 1. Configuratio
 
 ### `keyword-only-private-inputs` (GR001)
 
-Flags each fixed caller-supplied input to a private module-level function or method that is positional; implicit method receivers and variadic parameters are excluded.
+Flags each fixed caller-supplied input to a private module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
 
 Before → after:
 
 ```diff
 -def _resize_image(data: bytes, width: int) -> bytes:
-+def _resize_image(*, data: bytes, width: int) -> bytes:
++def _resize_image(data: bytes, /, *, width: int) -> bytes:
      return resize(data, width=width)
 
  def make_thumbnail(data: bytes) -> bytes:
--    return _resize_image(data, width=512)
-+    return _resize_image(data=data, width=512)
+     return _resize_image(data, width=512)
 ```
 
 ### `required-private-inputs` (GR002)
@@ -153,10 +152,14 @@ Before → after:
 
 ### Exceptions
 
-Suppress a rule on definitions that must follow an external calling convention or intentionally provide a convenience default:
+Use a positional-only marker when an external contract intentionally accepts positional calls. Suppress GR001 only when the contract must accept both positional and keyword calls. Suppress other rules on definitions that intentionally provide a convenience default or follow an external convention:
 
 ```python
-def _format_cost(value: float) -> str:  # noqa: GR001 -- Callable[[float], str]
+def _format_cost(value: float, /) -> str:
+    return f"${value:.2f}"
+
+
+def _format_cost_compat(value: float) -> str:  # noqa: GR001 -- contract accepts both call styles
     return f"${value:.2f}"
 
 
@@ -196,7 +199,7 @@ extend-select = ["ARG", "FBT", "B006", "B008", "PLR2004", "RUF012", "RUF022"]
      return resize(data, width=width)
 ```
 
-GR001 makes callers of private callables name every input; `FBT001` and `FBT002` extend that to boolean inputs on public callables:
+GR001 makes private definitions declare each input as positional-only or keyword-only; `FBT001` and `FBT002` extend the keyword-only convention to boolean inputs on public callables:
 
 ```diff
 -def resize_image(data: bytes, keep_aspect: bool) -> bytes:

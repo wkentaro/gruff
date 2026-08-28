@@ -8,7 +8,7 @@ use ruff_text_size::TextRange;
 pub(crate) struct PrivateInput<'a> {
     pub(crate) name: &'a str,
     pub(crate) range: TextRange,
-    pub(crate) is_keyword_only: bool,
+    pub(crate) is_positional_or_keyword: bool,
     pub(crate) is_required: bool,
 }
 
@@ -20,17 +20,24 @@ pub(crate) fn classify_private_inputs<'a>(
         .parameters
         .posonlyargs
         .iter()
-        .chain(&definition.parameters.args);
+        .map(|parameter| (parameter, false))
+        .chain(
+            definition
+                .parameters
+                .args
+                .iter()
+                .map(|parameter| (parameter, true)),
+        );
     let receiver_count = usize::from(
         is_method && !is_static_method(definition) && positional.clone().next().is_some(),
     );
 
     positional
         .skip(receiver_count)
-        .map(|parameter| PrivateInput {
+        .map(|(parameter, is_positional_or_keyword)| PrivateInput {
             name: parameter.name().as_str(),
             range: parameter.name().range,
-            is_keyword_only: false,
+            is_positional_or_keyword,
             is_required: parameter.default.is_none(),
         })
         .chain(
@@ -41,7 +48,7 @@ pub(crate) fn classify_private_inputs<'a>(
                 .map(|parameter| PrivateInput {
                     name: parameter.name().as_str(),
                     range: parameter.name().range,
-                    is_keyword_only: true,
+                    is_positional_or_keyword: false,
                     is_required: parameter.default.is_none(),
                 }),
         )
