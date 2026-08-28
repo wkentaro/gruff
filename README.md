@@ -122,6 +122,8 @@ Before → after:
 +    return _resize_image(data=data, width=512)
 ```
 
+Choose the input shape before suppressing the rule. If callers never vary a value, remove the input and keep the value inside the private definition instead of making every caller repeat it. If callers vary the value, keep the input required and have callers supply it explicitly. Reserve a default and GR002 suppression for meaningful semantic policy that would otherwise be duplicated across callers.
+
 ### `package-dunder-all` (GR003)
 
 Flags a package initializer when a successfully completing import path leaves a public binding without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, private-only, type-checking-only, and statically false paths do not require a manifest.
@@ -150,9 +152,11 @@ Before → after:
 +IMAGE_FORMAT: Final = "png"
 ```
 
+`Final` prevents type checkers from accepting rebinding; it does not make mutable contents immutable. For example, a `Final[list[str]]` still permits `append`. Use an immutable value when the contents must not change.
+
 ### Exceptions
 
-Use a positional-only marker when an external contract intentionally accepts positional calls. Suppress GR001 only when the contract must accept both positional and keyword calls. Suppress other rules on definitions that intentionally provide a convenience default or follow an external convention:
+Use a positional-only marker when an external contract intentionally accepts positional calls. Suppress GR001 only when the contract must accept both positional and keyword calls. Suppress GR002 only when a default centralizes meaningful semantic policy that callers would otherwise duplicate. Suppress GR004 when a binding intentionally follows an external convention:
 
 ```python
 def _format_cost(value: float, /) -> str:
@@ -163,8 +167,8 @@ def _format_cost_compat(value: float) -> str:  # noqa: GR001 -- contract accepts
     return f"${value:.2f}"
 
 
-def _render(*, value: float, unit: str = ""):  # noqa: GR002 -- optional suffix
-    return f"{value}{unit}"
+def _fetch(*, url: str, timeout: float = 30.0) -> bytes:  # noqa: GR002 -- service timeout policy
+    return fetch(url, timeout=timeout)
 
 
 EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling
