@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 
-def extract_release_notes(changelog: str, tag: str) -> str:
+def extract_release_notes(*, changelog: str, tag: str) -> str:
     version = tag[1:] if tag.startswith("v") else tag
     heading = f"## [{version}]"
     lines = changelog.splitlines(keepends=True)

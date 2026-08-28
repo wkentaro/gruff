@@ -69,10 +69,10 @@ fn checks_config_suppression_json_and_exit_status() {
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
     assert_eq!(findings.as_array().unwrap().len(), 2);
     assert_eq!(findings[0]["code"], "GR001");
-    assert_eq!(findings[0]["name"], "explicit-private-input-conventions");
+    assert_eq!(findings[0]["name"], "explicit-input-conventions");
     assert_eq!(
         findings[0]["message"],
-        "Private input `path` must be positional-only or keyword-only"
+        "Input `path` must be positional-only or keyword-only"
     );
     assert_eq!(findings[0]["severity"], "error");
     assert_eq!(findings[0]["location"]["row"], 1);
@@ -741,7 +741,7 @@ fn checks_hidden_files_once() {
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(
         String::from_utf8_lossy(&output.stdout)
-            .matches("GR001 Private input")
+            .matches("GR001 Input")
             .count(),
         2
     );
@@ -803,7 +803,7 @@ fn formats_github_output() {
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("line=1,col=11,endLine=1,endColumn=15"));
-    assert!(stdout.contains("Private input `path` must be positional-only or keyword-only"));
+    assert!(stdout.contains("Input `path` must be positional-only or keyword-only"));
     assert!(output.stderr.is_empty());
 
     fs::write(&path, "value = \"\"\"unterminated\nstring\n")

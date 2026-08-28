@@ -5,17 +5,17 @@ use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::visitor::walk_stmt;
 use ruff_text_size::TextRange;
 
-pub(crate) struct PrivateInput<'a> {
+pub(crate) struct Input<'a> {
     pub(crate) name: &'a str,
     pub(crate) range: TextRange,
     pub(crate) is_positional_or_keyword: bool,
     pub(crate) is_required: bool,
 }
 
-pub(crate) fn classify_private_inputs<'a>(
+pub(crate) fn classify_inputs<'a>(
     definition: &'a StmtFunctionDef,
     is_method: bool,
-) -> Vec<PrivateInput<'a>> {
+) -> Vec<Input<'a>> {
     let positional = definition
         .parameters
         .posonlyargs
@@ -34,7 +34,7 @@ pub(crate) fn classify_private_inputs<'a>(
 
     positional
         .skip(receiver_count)
-        .map(|(parameter, is_positional_or_keyword)| PrivateInput {
+        .map(|(parameter, is_positional_or_keyword)| Input {
             name: parameter.name().as_str(),
             range: parameter.name().range,
             is_positional_or_keyword,
@@ -45,7 +45,7 @@ pub(crate) fn classify_private_inputs<'a>(
                 .parameters
                 .kwonlyargs
                 .iter()
-                .map(|parameter| PrivateInput {
+                .map(|parameter| Input {
                     name: parameter.name().as_str(),
                     range: parameter.name().range,
                     is_positional_or_keyword: false,
@@ -55,13 +55,20 @@ pub(crate) fn classify_private_inputs<'a>(
         .collect()
 }
 
-pub(crate) fn find_private_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
-    let mut visitor = PrivateDefinitionVisitor {
+pub(crate) fn find_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
+    let mut visitor = DefinitionVisitor {
         scope: DefinitionScope::Module,
         definitions: Vec::new(),
     };
     visitor.visit_body(statements);
     visitor.definitions
+}
+
+pub(crate) fn find_private_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
+    find_definitions(statements)
+        .into_iter()
+        .filter(|(definition, _)| is_private_definition(&definition.name))
+        .collect()
 }
 
 fn is_private_definition(name: &str) -> bool {
@@ -81,26 +88,20 @@ enum DefinitionScope {
     Function,
 }
 
-struct PrivateDefinitionVisitor<'a> {
+struct DefinitionVisitor<'a> {
     scope: DefinitionScope,
     definitions: Vec<(&'a StmtFunctionDef, bool)>,
 }
 
-impl<'a> Visitor<'a> for PrivateDefinitionVisitor<'a> {
+impl<'a> Visitor<'a> for DefinitionVisitor<'a> {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
         let previous_scope = self.scope;
         match statement {
             Stmt::FunctionDef(definition) => {
                 match previous_scope {
-                    DefinitionScope::Module if is_private_definition(&definition.name) => {
-                        self.definitions.push((definition, false));
-                    }
-                    DefinitionScope::Class if is_private_definition(&definition.name) => {
-                        self.definitions.push((definition, true));
-                    }
-                    DefinitionScope::Module
-                    | DefinitionScope::Class
-                    | DefinitionScope::Function => {}
+                    DefinitionScope::Module => self.definitions.push((definition, false)),
+                    DefinitionScope::Class => self.definitions.push((definition, true)),
+                    DefinitionScope::Function => {}
                 }
                 self.scope = DefinitionScope::Function;
             }

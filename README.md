@@ -49,11 +49,11 @@ All rules are opt-in. Use an exact code such as `GR001` to adopt rules individua
 
 ## Rules at a glance
 
-The first release tests four theses: private inputs are easier to trace when definitions declare how callers pass them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
+The first release tests four theses: inputs are easier to trace when definitions declare how callers pass them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
-| GR001 | [`explicit-private-input-conventions`](#explicit-private-input-conventions-gr001) | Every fixed private input has an explicit calling convention. |
+| GR001 | [`explicit-input-conventions`](#explicit-input-conventions-gr001) | Every fixed input has an explicit calling convention. |
 | GR002 | [`required-private-inputs`](#required-private-inputs-gr002) | Callers supply every fixed input to private callables. |
 | GR003 | [`package-dunder-all`](#package-dunder-all-gr003) | Every public package import path defines `__all__`. |
 | GR004 | [`final-constants`](#final-constants-gr004) | Uppercase names and `Final` annotations appear together. |
@@ -91,9 +91,9 @@ Lint findings, including invalid Python syntax, exit with status 1. Configuratio
 
 ## Rule reference
 
-### `explicit-private-input-conventions` (GR001)
+### `explicit-input-conventions` (GR001)
 
-Flags each fixed caller-supplied input to a private module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
+Flags each fixed caller-supplied input to a module-level function or method that is positional-or-keyword, whatever the definition is named. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
 
 Before → after:
 
@@ -102,9 +102,11 @@ Before → after:
 +def _resize_image(data: bytes, /, *, width: int) -> bytes:
      return resize(data, width=width)
 
- def make_thumbnail(data: bytes) -> bytes:
+ def make_thumbnail(data: bytes, /) -> bytes:
      return _resize_image(data, width=512)
 ```
+
+GR002 stays private-only while GR001 covers every callable: a default on a public callable is the contract external callers depend on, while declaring a calling convention costs the same everywhere. Overrides of external base classes and framework hooks suppress with `# noqa: GR001`.
 
 ### `required-private-inputs` (GR002)
 
@@ -117,7 +119,7 @@ Before → after:
 +def _resize_image(*, data: bytes, width: int) -> bytes:
      return resize(data, width=width)
 
- def make_thumbnail(data: bytes) -> bytes:
+ def make_thumbnail(data: bytes, /) -> bytes:
 -    return _resize_image(data=data)
 +    return _resize_image(data=data, width=512)
 ```
@@ -195,7 +197,7 @@ extend-select = ["ARG", "FBT", "B006", "B008", "PLR2004", "RUF012", "RUF022"]
 
 ### Callable inputs (GR001, GR002)
 
-`ARG` flags unused function and method arguments, including arguments on private definitions:
+`ARG` flags unused function and method arguments, a shape neither GR001 nor GR002 inspects:
 
 ```diff
 -def _resize_image(*, data: bytes, width: int, legacy: bool) -> bytes:
@@ -203,22 +205,22 @@ extend-select = ["ARG", "FBT", "B006", "B008", "PLR2004", "RUF012", "RUF022"]
      return resize(data, width=width)
 ```
 
-GR001 makes private definitions declare each input as positional-only or keyword-only; `FBT001` and `FBT002` extend the keyword-only convention to boolean inputs on public callables:
+GR001 makes every definition declare each input as positional-only or keyword-only; `FBT001` and `FBT002` go further for booleans, which stay ambiguous at a call site even when GR001 accepts them as positional-only:
 
 ```diff
 -def resize_image(data: bytes, keep_aspect: bool) -> bytes:
-+def resize_image(data: bytes, *, keep_aspect: bool) -> bytes:
++def resize_image(data: bytes, /, *, keep_aspect: bool) -> bytes:
      return resize(data, keep_aspect=keep_aspect)
 ```
 
 GR002 removes defaults from private callables; `B006` and `B008` catch shared mutable defaults and import-time call defaults on the public callables that keep theirs:
 
 ```diff
--def make_thumbnails(data: bytes, widths: list[int] = []) -> list[bytes]:
-+def make_thumbnails(data: bytes, widths: list[int] | None = None) -> list[bytes]:
+-def make_thumbnails(data: bytes, /, *, widths: list[int] = []) -> list[bytes]:
++def make_thumbnails(data: bytes, /, *, widths: list[int] | None = None) -> list[bytes]:
 
--def fetch_image(client: Client = Client()) -> bytes:
-+def fetch_image(client: Client | None = None) -> bytes:
+-def fetch_image(*, client: Client = Client()) -> bytes:
++def fetch_image(*, client: Client | None = None) -> bytes:
 ```
 
 ### Package manifests (GR003)
@@ -254,7 +256,7 @@ GR003 only requires the manifest to exist. Once it does, `F401` flags re-exports
 ```diff
 +MAX_WIDTH: Final = 4096
 +
- def validate_width(width: int) -> None:
+ def validate_width(width: int, /) -> None:
 -    if width > 4096:
 +    if width > MAX_WIDTH:
          raise ValueError(width)
