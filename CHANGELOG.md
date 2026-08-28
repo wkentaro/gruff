@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [0.0.3] - 2026-08-28
+
+### Changed
+
+- Changed GR001 to cover every module-level function or method and renamed it to explicit-input-conventions. ([#38](https://github.com/wkentaro/gruff/pull/38))
+
+### Fixed
+
+- Fixed GR001's rule name and diagnostic to describe explicit private input calling conventions. ([#37](https://github.com/wkentaro/gruff/pull/37))
+
+
 ## [0.0.2] - 2026-08-28
 
 ### Changed
@@ -26,4 +37,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.0.1]: https://github.com/wkentaro/gruff/releases/tag/v0.0.1
 [0.0.2]: https://github.com/wkentaro/gruff/compare/v0.0.1...v0.0.2
-[unreleased]: https://github.com/wkentaro/gruff/compare/v0.0.2...main
+[0.0.3]: https://github.com/wkentaro/gruff/compare/v0.0.2...v0.0.3
+[unreleased]: https://github.com/wkentaro/gruff/compare/v0.0.3...main
