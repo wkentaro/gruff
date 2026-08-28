@@ -886,9 +886,19 @@ mod tests {
     }
 
     #[test]
+    fn reports_only_positional_or_keyword_private_inputs() {
+        let findings = check_rule("def _load(path, /, mode):\n    ...\n", "GR001");
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].message,
+            "Private input `mode` must be keyword-only"
+        );
+    }
+
+    #[test]
     fn classifies_private_definition_signature_shapes() {
         let keyword_only_violations = [
-            "def _load(path, /):\n    ...\n",
             "async def _load(path):\n    ...\n",
             "class Service:\n    def _load(self, path):\n        ...\n",
             "class Service:\n    @staticmethod\n    def _load(path):\n        ...\n",
@@ -921,12 +931,17 @@ mod tests {
             "def _load():\n    ...\n",
             "def _load(*, path):\n    ...\n",
             "def _forward(*args, **kwargs):\n    ...\n",
+            "def _load(path, /):\n    ...\n",
+            "async def _load(path, /):\n    ...\n",
             "def outer():\n    def _load(path=None):\n        ...\n",
             "def _():\n    ...\n",
             "def __load(path=None):\n    ...\n",
             "def _missing_(path=None):\n    ...\n",
             "class Service:\n    def _load(self, *, path):\n        ...\n",
             "class Service:\n    @classmethod\n    def _load(cls, *, path):\n        ...\n",
+            "class Service:\n    def _load(self, path, /):\n        ...\n",
+            "class Service:\n    @classmethod\n    def _load(cls, path, /):\n        ...\n",
+            "class Service:\n    @staticmethod\n    def _load(path, /):\n        ...\n",
             "class Service:\n    def _load(self=None):\n        ...\n",
         ];
         for source in allowed {
@@ -935,6 +950,14 @@ mod tests {
                 "unexpected finding for {source}"
             );
         }
+    }
+
+    #[test]
+    fn keeps_required_private_inputs_independent_for_positional_only_inputs() {
+        let findings = check_source(Path::new("test.py"), "def _load(path=None, /):\n    ...\n");
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "GR002");
     }
 
     #[test]
