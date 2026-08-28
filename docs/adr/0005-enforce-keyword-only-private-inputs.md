@@ -1,3 +1,0 @@
-# Require explicit private input calling conventions
-
-GR001 flags each fixed caller-supplied input to a private module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs are accepted because both declarations make the calling convention local, deterministic, and runtime-enforced. Positional-only inputs preserve explicit positional protocols without caller analysis or suppressions, while ordinary positional-or-keyword inputs remain ambiguous. Implicit method receivers and variadic parameters are excluded. The rule remains opt-in while repository trials establish that explicit private input calling conventions reliably reduce review work.

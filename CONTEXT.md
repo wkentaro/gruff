@@ -16,9 +16,9 @@ _Avoid_: Error, issue, violation
 A module-level function or method whose name starts with exactly one underscore and does not end with an underscore. Nested functions, dunder methods, name-mangled methods, and sunder protocol names are outside this term.
 _Avoid_: Internal callable, underscore function
 
-**Explicit private input calling conventions**:
-A policy requiring every non-receiver, non-variadic input to a private definition to be positional-only or keyword-only, so its calling convention is locally declared and runtime-enforced.
-_Avoid_: Private kwargs, named private inputs
+**Explicit input calling conventions**:
+A policy requiring every non-receiver, non-variadic input to a module-level function or method to be positional-only or keyword-only, so its calling convention is locally declared and runtime-enforced.
+_Avoid_: Kwargs-only definitions, named inputs
 
 **Required private inputs**:
 A policy requiring every non-receiver, non-variadic input to a private definition to have no default, so callers supply each value.

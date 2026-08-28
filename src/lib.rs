@@ -34,9 +34,9 @@ struct Rule {
 
 const RULES: &[Rule] = &[
     Rule {
-        code: rules::explicit_private_input_conventions::CODE,
-        name: rules::explicit_private_input_conventions::NAME,
-        check: rules::explicit_private_input_conventions::check,
+        code: rules::explicit_input_conventions::CODE,
+        name: rules::explicit_input_conventions::NAME,
+        check: rules::explicit_input_conventions::check,
     },
     Rule {
         code: rules::required_private_inputs::CODE,
@@ -859,11 +859,11 @@ mod tests {
         assert_eq!(findings[0].code, "GR001");
         assert_eq!(
             findings[0].message,
-            "Private input `data` must be positional-only or keyword-only"
+            "Input `data` must be positional-only or keyword-only"
         );
         assert_eq!(
             findings[1].message,
-            "Private input `width` must be positional-only or keyword-only"
+            "Input `width` must be positional-only or keyword-only"
         );
         assert_eq!(findings[2].code, "GR002");
         assert_eq!(
@@ -886,14 +886,59 @@ mod tests {
     }
 
     #[test]
-    fn reports_only_positional_or_keyword_private_inputs() {
+    fn reports_only_positional_or_keyword_inputs() {
         let findings = check_rule("def _load(path, /, mode):\n    ...\n", "GR001");
 
         assert_eq!(findings.len(), 1);
         assert_eq!(
             findings[0].message,
-            "Private input `mode` must be positional-only or keyword-only"
+            "Input `mode` must be positional-only or keyword-only"
         );
+    }
+
+    #[test]
+    fn reports_inputs_on_public_and_special_definitions() {
+        let conventions = [
+            "def load(path):\n    ...\n",
+            "class Service:\n    def __eq__(self, other):\n        ...\n",
+            "class Service:\n    def __load(self, path):\n        ...\n",
+            "class Service:\n    def _load_(self, path):\n        ...\n",
+            "class Service:\n    @staticmethod\n    def load(path):\n        ...\n",
+        ];
+        for source in conventions {
+            assert_eq!(
+                check_rule(source, "GR001").len(),
+                1,
+                "expected GR001 for {source}"
+            );
+        }
+
+        let allowed = [
+            "class Service:\n    def __eq__(self, other, /):\n        ...\n",
+            "def outer():\n    def load(path):\n        ...\n",
+            "load = lambda path: path\n",
+        ];
+        for source in allowed {
+            assert!(
+                check_rule(source, "GR001").is_empty(),
+                "unexpected GR001 for {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn keeps_required_private_inputs_private_only() {
+        let outside_scope = [
+            "def load(path=None):\n    ...\n",
+            "def __load(path=None):\n    ...\n",
+            "def _missing_(path=None):\n    ...\n",
+        ];
+        for source in outside_scope {
+            assert!(
+                check_rule(source, "GR002").is_empty(),
+                "unexpected GR002 for {source}"
+            );
+        }
     }
 
     #[test]
@@ -927,7 +972,6 @@ mod tests {
         }
 
         let allowed = [
-            "def load(path=None):\n    ...\n",
             "def _load():\n    ...\n",
             "def _load(*, path):\n    ...\n",
             "def _forward(*args, **kwargs):\n    ...\n",
@@ -935,8 +979,6 @@ mod tests {
             "async def _load(path, /):\n    ...\n",
             "def outer():\n    def _load(path=None):\n        ...\n",
             "def _():\n    ...\n",
-            "def __load(path=None):\n    ...\n",
-            "def _missing_(path=None):\n    ...\n",
             "class Service:\n    def _load(self, *, path):\n        ...\n",
             "class Service:\n    @classmethod\n    def _load(cls, *, path):\n        ...\n",
             "class Service:\n    def _load(self, path, /):\n        ...\n",
