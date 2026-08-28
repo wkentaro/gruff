@@ -7,7 +7,7 @@ use crate::analysis::classify_private_inputs;
 use crate::analysis::find_private_definitions;
 
 pub(crate) const CODE: &str = "GR001";
-pub(crate) const NAME: &str = "keyword-only-private-inputs";
+pub(crate) const NAME: &str = "explicit-private-input-conventions";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     find_private_definitions(statements)
@@ -17,7 +17,10 @@ pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
                 .into_iter()
                 .filter(|input| input.is_positional_or_keyword)
                 .map(|input| Diagnostic {
-                    message: format!("Private input `{}` must be keyword-only", input.name),
+                    message: format!(
+                        "Private input `{}` must be positional-only or keyword-only",
+                        input.name
+                    ),
                     range: input.range,
                 })
         })

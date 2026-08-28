@@ -44,6 +44,11 @@ fn checks_config_suppression_json_and_exit_status() {
     fs::write(directory.join("finding.py"), "def _load(path):\n    ...\n")
         .expect("finding source should be written");
     fs::write(
+        directory.join("explicit.py"),
+        "def _load(path, /):\n    ...\n\ndef _save(*, path):\n    ...\n",
+    )
+    .expect("explicit calling conventions should be written");
+    fs::write(
         directory.join("suppressed.py"),
         "def _save(path):  # noqa: GR001\n    ...\n",
     )
@@ -64,7 +69,11 @@ fn checks_config_suppression_json_and_exit_status() {
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
     assert_eq!(findings.as_array().unwrap().len(), 2);
     assert_eq!(findings[0]["code"], "GR001");
-    assert_eq!(findings[0]["name"], "keyword-only-private-inputs");
+    assert_eq!(findings[0]["name"], "explicit-private-input-conventions");
+    assert_eq!(
+        findings[0]["message"],
+        "Private input `path` must be positional-only or keyword-only"
+    );
     assert_eq!(findings[0]["severity"], "error");
     assert_eq!(findings[0]["location"]["row"], 1);
     assert!(PathBuf::from(findings[0]["filename"].as_str().unwrap()).is_absolute());
@@ -794,7 +803,7 @@ fn formats_github_output() {
     assert_eq!(output.status.code(), Some(1));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("line=1,col=11,endLine=1,endColumn=15"));
-    assert!(stdout.contains("Private input `path` must be keyword-only"));
+    assert!(stdout.contains("Private input `path` must be positional-only or keyword-only"));
     assert!(output.stderr.is_empty());
 
     fs::write(&path, "value = \"\"\"unterminated\nstring\n")

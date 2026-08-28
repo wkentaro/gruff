@@ -53,7 +53,7 @@ The first release tests four theses: private inputs are easier to trace when def
 
 | Code | Rule | Policy |
 | --- | --- | --- |
-| GR001 | [`keyword-only-private-inputs`](#keyword-only-private-inputs-gr001) | Every fixed private input has an explicit calling convention. |
+| GR001 | [`explicit-private-input-conventions`](#explicit-private-input-conventions-gr001) | Every fixed private input has an explicit calling convention. |
 | GR002 | [`required-private-inputs`](#required-private-inputs-gr002) | Callers supply every fixed input to private callables. |
 | GR003 | [`package-dunder-all`](#package-dunder-all-gr003) | Every public package import path defines `__all__`. |
 | GR004 | [`final-constants`](#final-constants-gr004) | Uppercase names and `Final` annotations appear together. |
@@ -91,7 +91,7 @@ Lint findings, including invalid Python syntax, exit with status 1. Configuratio
 
 ## Rule reference
 
-### `keyword-only-private-inputs` (GR001)
+### `explicit-private-input-conventions` (GR001)
 
 Flags each fixed caller-supplied input to a private module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
 

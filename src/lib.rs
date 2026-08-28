@@ -34,9 +34,9 @@ struct Rule {
 
 const RULES: &[Rule] = &[
     Rule {
-        code: rules::keyword_only_private_inputs::CODE,
-        name: rules::keyword_only_private_inputs::NAME,
-        check: rules::keyword_only_private_inputs::check,
+        code: rules::explicit_private_input_conventions::CODE,
+        name: rules::explicit_private_input_conventions::NAME,
+        check: rules::explicit_private_input_conventions::check,
     },
     Rule {
         code: rules::required_private_inputs::CODE,
@@ -859,11 +859,11 @@ mod tests {
         assert_eq!(findings[0].code, "GR001");
         assert_eq!(
             findings[0].message,
-            "Private input `data` must be keyword-only"
+            "Private input `data` must be positional-only or keyword-only"
         );
         assert_eq!(
             findings[1].message,
-            "Private input `width` must be keyword-only"
+            "Private input `width` must be positional-only or keyword-only"
         );
         assert_eq!(findings[2].code, "GR002");
         assert_eq!(
@@ -892,20 +892,20 @@ mod tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(
             findings[0].message,
-            "Private input `mode` must be keyword-only"
+            "Private input `mode` must be positional-only or keyword-only"
         );
     }
 
     #[test]
     fn classifies_private_definition_signature_shapes() {
-        let keyword_only_violations = [
+        let implicit_conventions = [
             "async def _load(path):\n    ...\n",
             "class Service:\n    def _load(self, path):\n        ...\n",
             "class Service:\n    @staticmethod\n    def _load(path):\n        ...\n",
             "class Service:\n    @classmethod\n    def _load(cls, path):\n        ...\n",
             "def build():\n    class Service:\n        def _load(self, path):\n            ...\n",
         ];
-        for source in keyword_only_violations {
+        for source in implicit_conventions {
             assert_eq!(
                 check_rule(source, "GR001").len(),
                 1,
