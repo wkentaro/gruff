@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [0.0.2] - 2026-08-28
+
+### Changed
+
+- Changed GR001 to accept fixed positional-only private inputs as an explicit calling convention. ([#32](https://github.com/wkentaro/gruff/pull/32))
+
+
 ## [0.0.1] - 2026-08-27
 
 ### Added
@@ -18,4 +25,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Python 3.10+ wheels for Linux x86_64 and aarch64, macOS x86_64 and arm64, and Windows x86_64.
 
 [0.0.1]: https://github.com/wkentaro/gruff/releases/tag/v0.0.1
-[unreleased]: https://github.com/wkentaro/gruff/compare/v0.0.1...main
+[0.0.2]: https://github.com/wkentaro/gruff/compare/v0.0.1...v0.0.2
+[unreleased]: https://github.com/wkentaro/gruff/compare/v0.0.2...main
