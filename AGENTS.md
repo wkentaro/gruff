@@ -15,3 +15,5 @@ Triage issue and pull-request state with the canonical labels in `docs/agents/tr
 ### Domain docs
 
 This is a single-context repository with a root glossary and project ADRs. See `docs/agents/domain.md`.
+
+When designing rules, give an independently adoptable scope expansion a new rule code instead of broadening an existing code; see `docs/adr/0005-enforce-explicit-input-conventions.md` for the rationale.
