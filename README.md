@@ -129,7 +129,7 @@ Choose the input shape before suppressing the rule. If callers never vary a valu
 
 ### `package-dunder-all` (GR003)
 
-Flags a package initializer when a successfully completing import path leaves a public binding without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, underscore-prefixed-only, type-checking-only, and statically false paths do not require a manifest.
+Flags a package initializer when a successfully completing import path leaves a binding whose name does not start with an underscore without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, underscore-prefixed-only, type-checking-only, and statically false paths do not require a manifest.
 
 Before → after:
 
@@ -193,7 +193,7 @@ def _fetch(*, url: str, timeout: float = 30.0) -> bytes:  # noqa: GR002 -- servi
 EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling
 ```
 
-For a dynamic package manifest, suppress GR003 on the reported public binding and state why deterministic source analysis does not apply:
+For a dynamic package manifest, suppress GR003 on the reported binding whose name does not start with an underscore and state why deterministic source analysis does not apply:
 
 ```python
 public = load_exports()  # noqa: GR003 -- exec() defines __all__ below
