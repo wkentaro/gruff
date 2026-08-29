@@ -49,7 +49,7 @@ All rules are opt-in. Use an exact code such as `GR001` to adopt rules individua
 
 ## Rules at a glance
 
-The first release tests four theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
+The first release tests five theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, and non-public definitions are easier to understand when their names carry their purpose.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
@@ -58,6 +58,7 @@ The first release tests four theses: inputs are easier to trace when definitions
 | GR003 | [`package-dunder-all`](#package-dunder-all-gr003) | Every public package import path defines `__all__`. |
 | GR004 | [`final-constants`](#final-constants-gr004) | Uppercase names and `Final` annotations appear together. |
 | GR005 | [`explicit-public-input-conventions`](#explicit-public-input-conventions-gr005) | Every fixed input to a public callable has an explicit calling convention. |
+| GR006 | [`no-non-public-docstrings`](#no-non-public-docstrings-gr006) | Non-public definitions carry their purpose in their names instead of docstrings. |
 
 ## Configuration and CLI
 
@@ -68,7 +69,7 @@ Gruff reads configuration only from `pyproject.toml`:
 output-format = "full"
 
 [tool.gruff.lint]
-select = ["GR001", "GR002", "GR003", "GR004", "GR005"]
+select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006"]
 ignore = []
 per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
@@ -173,6 +174,20 @@ Before → after:
 
 For established libraries, enable GR001 first. Before enabling GR005, review public and protocol definitions for downstream compatibility; migrate compatible signatures and suppress contracts that must still accept both positional and keyword calls. `GR` and `ALL` enable both rules for greenfield projects and completed migrations.
 
+### `no-non-public-docstrings` (GR006)
+
+Flags a non-public module-level function or method when its first body statement is a string literal. Remove a redundant docstring; if the definition becomes unclear without it, rename the function or method. Keep non-obvious reasoning as ordinary comments inside the definition.
+
+Before → after:
+
+```diff
+ def _load_config(*, path: Path) -> Config:
+-    """Load configuration from a path."""
+     return Config.parse(path.read_text())
+```
+
+GR006 uses the same non-public definition boundary as GR001 and GR002. It reports the docstring literal, so an intentional exception places `# noqa: GR006` after a single-line docstring or after the closing quotes of a multiline docstring.
+
 ### Exceptions
 
 Use a positional-only marker when an external contract intentionally accepts positional calls. Suppress GR001 or GR005 only when the contract must accept both positional and keyword calls. Suppress GR002 only when a default centralizes meaningful semantic policy that callers would otherwise duplicate. Suppress GR004 when a binding intentionally follows an external convention:
@@ -191,6 +206,10 @@ def _fetch(*, url: str, timeout: float = 30.0) -> bytes:  # noqa: GR002 -- servi
 
 
 EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling
+
+
+def _documented_hook() -> None:
+    """Required by the framework contract."""  # noqa: GR006 -- inherited documentation contract
 ```
 
 For a dynamic package manifest, suppress GR003 on the reported binding whose name does not start with an underscore and state why deterministic source analysis does not apply:

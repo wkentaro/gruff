@@ -43,6 +43,7 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
                 "Package initializer with public bindings must define __all__ on every import path"
                     .to_owned(),
             range,
+            noqa_offset: None,
         })
         .into_iter()
         .collect()

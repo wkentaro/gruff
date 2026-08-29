@@ -1,0 +1,3 @@
+# Prohibit non-public docstrings
+
+GR006 flags a string literal in the docstring position of a non-public module-level function or method. The policy keeps purpose in callable names while ordinary comments retain non-obvious reasoning; a 2026-08-29 sweep found 16 matching definitions across five repositories, including 9 in non-fork projects, and the rule remains opt-in while repository trials establish that it reliably reduces review work. Findings point at the docstring, so inline suppression belongs on its logical end line; public definitions, nested functions, other comments, and autofixes remain outside the rule.

@@ -27,6 +27,7 @@ pub(super) fn check_definitions(definitions: Vec<(&StmtFunctionDef, bool)>) -> V
                         input.name
                     ),
                     range: input.range,
+                    noqa_offset: None,
                 })
         })
         .collect()
