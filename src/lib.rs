@@ -34,14 +34,14 @@ struct Rule {
 
 const RULES: &[Rule] = &[
     Rule {
-        code: rules::explicit_input_conventions::CODE,
-        name: rules::explicit_input_conventions::NAME,
-        check: rules::explicit_input_conventions::check,
+        code: rules::explicit_non_public_input_conventions::CODE,
+        name: rules::explicit_non_public_input_conventions::NAME,
+        check: rules::explicit_non_public_input_conventions::check,
     },
     Rule {
-        code: rules::required_private_inputs::CODE,
-        name: rules::required_private_inputs::NAME,
-        check: rules::required_private_inputs::check,
+        code: rules::required_non_public_inputs::CODE,
+        name: rules::required_non_public_inputs::NAME,
+        check: rules::required_non_public_inputs::check,
     },
     Rule {
         code: rules::package_dunder_all::CODE,
@@ -52,6 +52,11 @@ const RULES: &[Rule] = &[
         code: rules::final_constants::CODE,
         name: rules::final_constants::NAME,
         check: rules::final_constants::check,
+    },
+    Rule {
+        code: rules::explicit_public_input_conventions::CODE,
+        name: rules::explicit_public_input_conventions::NAME,
+        check: rules::explicit_public_input_conventions::check,
     },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
@@ -849,7 +854,7 @@ mod tests {
     }
 
     #[test]
-    fn reports_each_private_input() {
+    fn reports_each_non_public_input() {
         let findings = check_source(
             Path::new("test.py"),
             "def _resize(data, width=512, *, mode=\"fit\"):\n    ...\n",
@@ -868,9 +873,12 @@ mod tests {
         assert_eq!(findings[2].code, "GR002");
         assert_eq!(
             findings[2].message,
-            "Private input `width` must be required"
+            "Non-public input `width` must be required"
         );
-        assert_eq!(findings[3].message, "Private input `mode` must be required");
+        assert_eq!(
+            findings[3].message,
+            "Non-public input `mode` must be required"
+        );
     }
 
     #[test]
@@ -897,22 +905,49 @@ mod tests {
     }
 
     #[test]
-    fn reports_inputs_on_public_and_special_definitions() {
-        let conventions = [
-            "def load(path):\n    ...\n",
+    fn splits_definition_names_into_complementary_scopes() {
+        let definitions = [
+            ("load", "GR005"),
+            ("load_", "GR005"),
+            ("_load_", "GR005"),
+            ("__load__", "GR005"),
+            ("_load", "GR001"),
+            ("__load", "GR001"),
+        ];
+        for (name, expected_code) in definitions {
+            let source = format!("def {name}(path):\n    ...\n");
+            let other_code = if expected_code == "GR001" {
+                "GR005"
+            } else {
+                "GR001"
+            };
+            assert_eq!(
+                check_rule(&source, expected_code).len(),
+                1,
+                "expected {expected_code} for {source}"
+            );
+            assert!(check_rule(&source, other_code).is_empty());
+        }
+    }
+
+    #[test]
+    fn reports_public_method_inputs() {
+        let definitions = [
             "class Service:\n    def __eq__(self, other):\n        ...\n",
-            "class Service:\n    def __load(self, path):\n        ...\n",
             "class Service:\n    def _load_(self, path):\n        ...\n",
             "class Service:\n    @staticmethod\n    def load(path):\n        ...\n",
         ];
-        for source in conventions {
+        for source in definitions {
             assert_eq!(
-                check_rule(source, "GR001").len(),
+                check_rule(source, "GR005").len(),
                 1,
-                "expected GR001 for {source}"
+                "expected GR005 for {source}"
             );
         }
+    }
 
+    #[test]
+    fn keeps_definition_scope_exclusions() {
         let allowed = [
             "class Service:\n    def __eq__(self, other, /):\n        ...\n",
             "def outer():\n    def load(path):\n        ...\n",
@@ -920,18 +955,19 @@ mod tests {
         ];
         for source in allowed {
             assert!(
-                check_rule(source, "GR001").is_empty(),
-                "unexpected GR001 for {source}"
+                check_source(Path::new("test.py"), source).is_empty(),
+                "unexpected finding for {source}"
             );
         }
     }
 
     #[test]
-    fn keeps_required_private_inputs_private_only() {
+    fn keeps_required_non_public_inputs_non_public_only() {
         let outside_scope = [
             "def load(path=None):\n    ...\n",
-            "def __load(path=None):\n    ...\n",
+            "def load_(path=None):\n    ...\n",
             "def _missing_(path=None):\n    ...\n",
+            "def __load__(path=None):\n    ...\n",
         ];
         for source in outside_scope {
             assert!(
@@ -939,13 +975,25 @@ mod tests {
                 "unexpected GR002 for {source}"
             );
         }
+
+        for source in [
+            "def _load(path=None):\n    ...\n",
+            "def __load(path=None):\n    ...\n",
+        ] {
+            assert_eq!(
+                check_rule(source, "GR002").len(),
+                1,
+                "expected GR002 for {source}"
+            );
+        }
     }
 
     #[test]
-    fn classifies_private_definition_signature_shapes() {
+    fn classifies_non_public_definition_signature_shapes() {
         let implicit_conventions = [
             "async def _load(path):\n    ...\n",
             "class Service:\n    def _load(self, path):\n        ...\n",
+            "class Service:\n    def __load(self, path):\n        ...\n",
             "class Service:\n    @staticmethod\n    def _load(path):\n        ...\n",
             "class Service:\n    @classmethod\n    def _load(cls, path):\n        ...\n",
             "def build():\n    class Service:\n        def _load(self, path):\n            ...\n",
@@ -995,7 +1043,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_required_private_inputs_independent_for_positional_only_inputs() {
+    fn keeps_required_non_public_inputs_independent_for_positional_only_inputs() {
         let findings = check_source(Path::new("test.py"), "def _load(path=None, /):\n    ...\n");
 
         assert_eq!(findings.len(), 1);

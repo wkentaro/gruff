@@ -49,14 +49,15 @@ All rules are opt-in. Use an exact code such as `GR001` to adopt rules individua
 
 ## Rules at a glance
 
-The first release tests four theses: inputs are easier to trace when definitions declare how callers pass them, private behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
+The first release tests four theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, and constants are easier to review when uppercase names and `Final` annotations always appear together.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
-| GR001 | [`explicit-input-conventions`](#explicit-input-conventions-gr001) | Every fixed input has an explicit calling convention. |
-| GR002 | [`required-private-inputs`](#required-private-inputs-gr002) | Callers supply every fixed input to private callables. |
+| GR001 | [`explicit-non-public-input-conventions`](#explicit-non-public-input-conventions-gr001) | Every fixed input to a non-public callable has an explicit calling convention. |
+| GR002 | [`required-non-public-inputs`](#required-non-public-inputs-gr002) | Callers supply every fixed input to non-public callables. |
 | GR003 | [`package-dunder-all`](#package-dunder-all-gr003) | Every public package import path defines `__all__`. |
 | GR004 | [`final-constants`](#final-constants-gr004) | Uppercase names and `Final` annotations appear together. |
+| GR005 | [`explicit-public-input-conventions`](#explicit-public-input-conventions-gr005) | Every fixed input to a public callable has an explicit calling convention. |
 
 ## Configuration and CLI
 
@@ -67,7 +68,7 @@ Gruff reads configuration only from `pyproject.toml`:
 output-format = "full"
 
 [tool.gruff.lint]
-select = ["GR001", "GR002", "GR003", "GR004"]
+select = ["GR001", "GR002", "GR003", "GR004", "GR005"]
 ignore = []
 per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
@@ -78,7 +79,7 @@ Command-line options override configuration:
 
 ```console
 gruff check .
-gruff check --select GR001,GR002 .
+gruff check --select GR001,GR002,GR005 .
 gruff check --ignore GR004 .
 gruff check --output-format github .
 gruff check --config path/to/pyproject.toml .
@@ -91,9 +92,9 @@ Lint findings, including invalid Python syntax, exit with status 1. Configuratio
 
 ## Rule reference
 
-### `explicit-input-conventions` (GR001)
+### `explicit-non-public-input-conventions` (GR001)
 
-Flags each fixed caller-supplied input to a module-level function or method that is positional-or-keyword, whatever the definition is named. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
+Flags each fixed caller-supplied input to a non-public module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
 
 Before → after:
 
@@ -106,11 +107,11 @@ Before → after:
      return _resize_image(data, width=512)
 ```
 
-GR002 stays private-only while GR001 covers every callable: a default on a public callable is the contract external callers depend on, while declaring a calling convention costs the same everywhere. Overrides of external base classes and framework hooks suppress with `# noqa: GR001`.
+A non-public definition starts with an underscore and does not end with one. This includes `_name` and `__name` spellings; double-leading names are name-mangled in class scope. Ordinary, trailing-underscore, sunder, and dunder definitions are excluded.
 
-### `required-private-inputs` (GR002)
+### `required-non-public-inputs` (GR002)
 
-Flags each fixed caller-supplied input to a private module-level function or method that has a default; implicit method receivers and variadic parameters are excluded.
+Flags each fixed caller-supplied input to a non-public module-level function or method that has a default; implicit method receivers and variadic parameters are excluded.
 
 Before → after:
 
@@ -124,11 +125,11 @@ Before → after:
 +    return _resize_image(data=data, width=512)
 ```
 
-Choose the input shape before suppressing the rule. If callers never vary a value, remove the input and keep the value inside the private definition instead of making every caller repeat it. If callers vary the value, keep the input required and have callers supply it explicitly. Reserve a default and GR002 suppression for meaningful semantic policy that would otherwise be duplicated across callers.
+Choose the input shape before suppressing the rule. If callers never vary a value, remove the input and keep the value inside the non-public definition instead of making every caller repeat it. If callers vary the value, keep the input required and have callers supply it explicitly. Reserve a default and GR002 suppression for meaningful semantic policy that would otherwise be duplicated across callers.
 
 ### `package-dunder-all` (GR003)
 
-Flags a package initializer when a successfully completing import path leaves a public binding without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, private-only, type-checking-only, and statically false paths do not require a manifest.
+Flags a package initializer when a successfully completing import path leaves a public binding without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, non-public-only, type-checking-only, and statically false paths do not require a manifest.
 
 Before → after:
 
@@ -156,16 +157,32 @@ Before → after:
 
 `Final` prevents type checkers from accepting rebinding; it does not make mutable contents immutable. For example, a `Final[list[str]]` still permits `append`. Use an immutable value when the contents must not change.
 
+### `explicit-public-input-conventions` (GR005)
+
+Flags each fixed caller-supplied input to a public module-level function or method that is positional-or-keyword. It accepts and excludes the same input shapes as GR001.
+
+For this syntactic policy, public definitions are the complement of non-public definitions. They include ordinary names, public names with a trailing underscore, framework or protocol sunder hooks, and system-defined dunder methods; the label does not infer whether an interface is documented or exported.
+
+Before → after:
+
+```diff
+-def resize_image(data: bytes, width: int) -> bytes:
++def resize_image(data: bytes, /, *, width: int) -> bytes:
+     return resize(data, width=width)
+```
+
+For established libraries, enable GR001 first. Before enabling GR005, review public and protocol definitions for downstream compatibility; migrate compatible signatures and suppress contracts that must still accept both positional and keyword calls. `GR` and `ALL` enable both rules for greenfield projects and completed migrations.
+
 ### Exceptions
 
-Use a positional-only marker when an external contract intentionally accepts positional calls. Suppress GR001 only when the contract must accept both positional and keyword calls. Suppress GR002 only when a default centralizes meaningful semantic policy that callers would otherwise duplicate. Suppress GR004 when a binding intentionally follows an external convention:
+Use a positional-only marker when an external contract intentionally accepts positional calls. Suppress GR001 or GR005 only when the contract must accept both positional and keyword calls. Suppress GR002 only when a default centralizes meaningful semantic policy that callers would otherwise duplicate. Suppress GR004 when a binding intentionally follows an external convention:
 
 ```python
 def _format_cost(value: float, /) -> str:
     return f"${value:.2f}"
 
 
-def _format_cost_compat(value: float) -> str:  # noqa: GR001 -- contract accepts both call styles
+def format_cost_compat(value: float) -> str:  # noqa: GR005 -- contract accepts both call styles
     return f"${value:.2f}"
 
 
@@ -195,9 +212,9 @@ extend-select = ["ARG", "FBT", "B006", "B008", "PLR2004", "RUF012", "RUF022"]
 
 `F401` and `F822` are in Ruff's default rule set; the pairing below assumes they stay enabled.
 
-### Callable inputs (GR001, GR002)
+### Callable inputs (GR001, GR002, GR005)
 
-`ARG` flags unused function and method arguments, a shape neither GR001 nor GR002 inspects:
+`ARG` flags unused function and method arguments, a shape none of GR001, GR002, or GR005 inspects:
 
 ```diff
 -def _resize_image(*, data: bytes, width: int, legacy: bool) -> bytes:
@@ -205,7 +222,7 @@ extend-select = ["ARG", "FBT", "B006", "B008", "PLR2004", "RUF012", "RUF022"]
      return resize(data, width=width)
 ```
 
-GR001 makes every definition declare each input as positional-only or keyword-only; `FBT001` and `FBT002` go further for booleans, which stay ambiguous at a call site even when GR001 accepts them as positional-only:
+Together, GR001 and GR005 make every definition declare each input as positional-only or keyword-only. `FBT001` and `FBT002` go further for booleans, which stay ambiguous at a call site even when Gruff accepts them as positional-only:
 
 ```diff
 -def resize_image(data: bytes, keep_aspect: bool) -> bytes:
@@ -213,7 +230,7 @@ GR001 makes every definition declare each input as positional-only or keyword-on
      return resize(data, keep_aspect=keep_aspect)
 ```
 
-GR002 removes defaults from private callables; `B006` and `B008` catch shared mutable defaults and import-time call defaults on the public callables that keep theirs:
+GR002 removes defaults from non-public callables; `B006` and `B008` catch shared mutable defaults and import-time call defaults on the public callables that keep theirs:
 
 ```diff
 -def make_thumbnails(data: bytes, /, *, widths: list[int] = []) -> list[bytes]:

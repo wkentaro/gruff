@@ -64,15 +64,22 @@ pub(crate) fn find_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bo
     visitor.definitions
 }
 
-pub(crate) fn find_private_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
+pub(crate) fn find_non_public_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
     find_definitions(statements)
         .into_iter()
-        .filter(|(definition, _)| is_private_definition(&definition.name))
+        .filter(|(definition, _)| is_non_public_definition(&definition.name))
         .collect()
 }
 
-fn is_private_definition(name: &str) -> bool {
-    name.starts_with('_') && !name.starts_with("__") && !name.ends_with('_')
+pub(crate) fn find_public_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
+    find_definitions(statements)
+        .into_iter()
+        .filter(|(definition, _)| !is_non_public_definition(&definition.name))
+        .collect()
+}
+
+fn is_non_public_definition(name: &str) -> bool {
+    name.starts_with('_') && !name.ends_with('_')
 }
 
 fn is_static_method(definition: &StmtFunctionDef) -> bool {

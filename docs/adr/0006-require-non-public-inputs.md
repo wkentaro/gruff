@@ -1,0 +1,3 @@
+# Require non-public inputs
+
+GR002 flags each defaulted fixed caller-supplied input to a non-public module-level function or method. The shared non-public boundary includes `_name` and `__name` definitions, with double-leading names mangled in class scope, while excluding ordinary, trailing-underscore, sunder, and dunder definitions. Requiring callers to supply every value makes non-public behavior explicit without caller analysis; the specification sweep found about 57 affected definitions across the reference repositories. Implicit method receivers and variadic parameters remain excluded. The rule remains opt-in while repository trials establish that required non-public inputs reliably reduce review work.
