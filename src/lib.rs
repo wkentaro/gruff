@@ -58,6 +58,11 @@ const RULES: &[Rule] = &[
         name: rules::explicit_public_input_conventions::NAME,
         check: rules::explicit_public_input_conventions::check,
     },
+    Rule {
+        code: rules::no_non_public_docstrings::CODE,
+        name: rules::no_non_public_docstrings::NAME,
+        check: rules::no_non_public_docstrings::check,
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",
@@ -606,7 +611,10 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
 
     for rule in RULES {
         for diagnostic in (rule.check)(path, parsed.suite()) {
-            let noqa_row = find_noqa_row(source, parsed.tokens(), diagnostic.range);
+            let noqa_row = diagnostic.noqa_offset.map_or_else(
+                || find_noqa_row(source, parsed.tokens(), diagnostic.range),
+                |offset| locate_offset(source, offset.to_usize()).row,
+            );
             if has_noqa(source, parsed.tokens(), noqa_row, rule.code) {
                 continue;
             }
@@ -944,6 +952,79 @@ mod tests {
                 "expected GR005 for {source}"
             );
         }
+    }
+
+    #[test]
+    fn reports_non_public_definition_docstrings() {
+        let findings = check_rule(
+            "def _load():\n    \"\"\"Load data.\"\"\"\n    ...\n",
+            "GR006",
+        );
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(
+            findings[0].message,
+            "Remove docstring from non-public definition `_load`; rename it if its purpose is unclear"
+        );
+        assert_eq!(findings[0].location.row, 2);
+        assert_eq!(findings[0].location.column, 5);
+    }
+
+    #[test]
+    fn checks_non_public_docstring_scope_and_shape() {
+        let prohibited = [
+            "async def _load():\n    \"\"\"Load.\"\"\"\n",
+            "def __load():\n    \"\"\"Load.\"\"\"\n",
+            "class Service:\n    def _load(self):\n        \"\"\"Load.\"\"\"\n",
+            "class Service:\n    @classmethod\n    def _load(cls):\n        \"\"\"Load.\"\"\"\n",
+            "class Service:\n    @staticmethod\n    def _load():\n        \"\"\"Load.\"\"\"\n",
+        ];
+        for source in prohibited {
+            assert_eq!(
+                check_rule(source, "GR006").len(),
+                1,
+                "expected GR006 for {source}"
+            );
+        }
+
+        let allowed = [
+            "def load():\n    \"\"\"Load.\"\"\"\n",
+            "def load_():\n    \"\"\"Load.\"\"\"\n",
+            "def _load_():\n    \"\"\"Load.\"\"\"\n",
+            "def __load__():\n    \"\"\"Load.\"\"\"\n",
+            "def outer():\n    def _load():\n        \"\"\"Load.\"\"\"\n",
+            "def _load():\n    pass\n    \"\"\"Not a docstring.\"\"\"\n",
+            "def _load():\n    b\"Not a docstring.\"\n",
+            "def _load():\n    f\"Not a docstring.\"\n",
+        ];
+        for source in allowed {
+            assert!(
+                check_rule(source, "GR006").is_empty(),
+                "unexpected GR006 for {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn suppresses_non_public_docstrings_on_their_logical_end_line() {
+        let suppressed = [
+            "def _load():\n    \"\"\"Load.\"\"\"  # noqa: GR006\n",
+            "def _load():\n    \"\"\"\n    Load.\n    \"\"\"  # noqa: GR006\n",
+            "def _load():\n    (\n        \"\"\"\n        Load.\n        \"\"\"  # noqa: GR006\n    )\n",
+        ];
+        for source in suppressed {
+            assert!(
+                check_rule(source, "GR006").is_empty(),
+                "unexpected GR006 for {source}"
+            );
+        }
+
+        let findings = check_rule(
+            "def _load():  # noqa: GR006\n    \"\"\"Load.\"\"\"\n",
+            "GR006",
+        );
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].noqa_row, Some(2));
     }
 
     #[test]

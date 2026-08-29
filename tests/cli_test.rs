@@ -124,6 +124,105 @@ fn checks_required_non_public_inputs_selection_and_suppression() {
 }
 
 #[test]
+fn checks_no_non_public_docstrings_selection_and_suppression() {
+    let directory = create_temp_directory("no-non-public-docstrings");
+    fs::write(
+        directory.join("pyproject.toml"),
+        "[tool.gruff]\noutput-format = \"json\"\n\n[tool.gruff.lint]\nselect = [\"GR006\"]\nper-file-ignores = { \"ignored.py\" = [\"GR006\"] }\n",
+    )
+    .expect("test configuration should be written");
+    fs::write(
+        directory.join("finding.py"),
+        "def _load():\n    \"\"\"\n    Load.\n    \"\"\"\n",
+    )
+    .expect("Python finding source should be written");
+    fs::write(
+        directory.join("finding.pyi"),
+        "def __load():\n    \"\"\"Load.\"\"\"\n",
+    )
+    .expect("stub finding source should be written");
+    fs::write(
+        directory.join("finding.pyw"),
+        "def _write():\n    \"\"\"Write.\"\"\"\n\ndef _load():\n    \"\"\"Load.\"\"\"  # noqa: GR006\n\ndef _save():\n    \"\"\"\n    Save.\n    \"\"\"  # noqa: GR006\n",
+    )
+    .expect("Python window source should be written");
+    fs::write(
+        directory.join("ignored.py"),
+        "def _send():\n    \"\"\"Send.\"\"\"\n",
+    )
+    .expect("ignored Python source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 3);
+    for finding in findings.as_array().unwrap() {
+        assert_eq!(finding["code"], "GR006");
+        assert_eq!(finding["name"], "no-non-public-docstrings");
+        assert_eq!(finding["location"]["row"], 2);
+        assert_eq!(finding["location"]["column"], 5);
+    }
+    let mut extensions: Vec<_> = findings
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|finding| {
+            PathBuf::from(finding["filename"].as_str().unwrap())
+                .extension()
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
+    extensions.sort();
+    assert_eq!(extensions, ["py", "pyi", "pyw"]);
+
+    for selector in ["GR", "ALL"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                selector,
+                "--output-format",
+                "json",
+                "finding.py",
+            ])
+            .current_dir(&directory)
+            .output()
+            .expect("gruff should run");
+        let findings: Value =
+            serde_json::from_slice(&output.stdout).expect("output should be JSON");
+        assert_eq!(findings.as_array().unwrap().len(), 1);
+        assert_eq!(findings[0]["code"], "GR006");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR006",
+            "--ignore",
+            "GR006",
+            "finding.py",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"All checks passed!\n");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No rules are enabled"));
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn splits_input_convention_rules_under_prefix_selection() {
     let directory = create_temp_directory("split-input-conventions");
     fs::write(

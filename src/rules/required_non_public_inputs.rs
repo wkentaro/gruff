@@ -19,6 +19,7 @@ pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
                 .map(|input| Diagnostic {
                     message: format!("Non-public input `{}` must be required", input.name),
                     range: input.range,
+                    noqa_offset: None,
                 })
         })
         .collect()
