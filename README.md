@@ -129,7 +129,7 @@ Choose the input shape before suppressing the rule. If callers never vary a valu
 
 ### `package-dunder-all` (GR003)
 
-Flags a package initializer when a successfully completing import path leaves a public binding without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, non-public-only, type-checking-only, and statically false paths do not require a manifest.
+Flags a package initializer when a successfully completing import path leaves a public binding without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, underscore-prefixed-only, type-checking-only, and statically false paths do not require a manifest.
 
 Before → after:
 
