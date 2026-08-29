@@ -29,7 +29,7 @@ A policy requiring every non-receiver, non-variadic input to a non-public defini
 _Avoid_: Required private inputs, no non-public defaults, explicit non-public inputs
 
 **Package dunder all**:
-A policy requiring every successfully completing package-initializer path with public bindings to finish with `__all__` bound.
+A policy requiring every successfully completing package-initializer path with a binding whose name does not start with an underscore to finish with `__all__` bound.
 _Avoid_: Explicit exports, package exports
 
 **Final constants**:
