@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [0.0.4] - 2026-08-29
+
+### Added
+
+- Added opt-in GR006 to prohibit docstrings on non-public definitions. ([#51](https://github.com/wkentaro/gruff/pull/51))
+
+### Changed
+
+- Split explicit input conventions into independently selectable non-public GR001 and public GR005 rules, and aligned GR002 with the non-public definition boundary. ([#42](https://github.com/wkentaro/gruff/pull/42))
+
+
 ## [0.0.3] - 2026-08-28
 
 ### Changed
@@ -38,4 +49,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.0.1]: https://github.com/wkentaro/gruff/releases/tag/v0.0.1
 [0.0.2]: https://github.com/wkentaro/gruff/compare/v0.0.1...v0.0.2
 [0.0.3]: https://github.com/wkentaro/gruff/compare/v0.0.2...v0.0.3
-[unreleased]: https://github.com/wkentaro/gruff/compare/v0.0.3...main
+[0.0.4]: https://github.com/wkentaro/gruff/compare/v0.0.3...v0.0.4
+[unreleased]: https://github.com/wkentaro/gruff/compare/v0.0.4...main

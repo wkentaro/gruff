@@ -1,6 +1,6 @@
 [package]
 name = "gruff"
-version = "0.0.3"
+version = "0.0.4"
 description = "An opinionated deterministic maintainability linter for Python"
 edition = "2024"
 rust-version = "1.95"
