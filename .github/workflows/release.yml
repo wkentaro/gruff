@@ -93,8 +93,6 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - name: Extract release notes
-        run: python3 tools/release_notes.py "$GITHUB_REF_NAME" CHANGELOG.md release-notes.md
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           pattern: wheels-*
@@ -107,4 +105,11 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+        run: |-
+          version=${GITHUB_REF_NAME#v}
+          awk -v heading="## $version " 'index($0, heading) == 1 {found = 1; next}
+            found && /^## / {exit} found' CHANGELOG.md > notes.md
+          test -s notes.md
+          case $version in *[a-z]*) prerelease=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md $prerelease

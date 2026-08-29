@@ -26,4 +26,3 @@ format:  # Format code
 
 test:  # Test code
 	$(call exec,cargo test --all-targets --locked)
-	$(call exec,python3 -m tests.tools.release_notes_test)
