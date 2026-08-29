@@ -69,7 +69,7 @@ fn checks_config_suppression_json_and_exit_status() {
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
     assert_eq!(findings.as_array().unwrap().len(), 2);
     assert_eq!(findings[0]["code"], "GR001");
-    assert_eq!(findings[0]["name"], "explicit-input-conventions");
+    assert_eq!(findings[0]["name"], "explicit-non-public-input-conventions");
     assert_eq!(
         findings[0]["message"],
         "Input `path` must be positional-only or keyword-only"
@@ -85,8 +85,8 @@ fn checks_config_suppression_json_and_exit_status() {
 }
 
 #[test]
-fn checks_required_private_inputs_selection_and_suppression() {
-    let directory = create_temp_directory("required-private-inputs");
+fn checks_required_non_public_inputs_selection_and_suppression() {
+    let directory = create_temp_directory("required-non-public-inputs");
     fs::write(
         directory.join("pyproject.toml"),
         "[tool.gruff.lint]\nselect = [\"GR002\"]\n",
@@ -114,11 +114,71 @@ fn checks_required_private_inputs_selection_and_suppression() {
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
     assert_eq!(findings.as_array().unwrap().len(), 1);
     assert_eq!(findings[0]["code"], "GR002");
-    assert_eq!(findings[0]["name"], "required-private-inputs");
+    assert_eq!(findings[0]["name"], "required-non-public-inputs");
     assert_eq!(
         findings[0]["message"],
-        "Private input `path` must be required"
+        "Non-public input `path` must be required"
     );
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn splits_input_convention_rules_under_prefix_selection() {
+    let directory = create_temp_directory("split-input-conventions");
+    fs::write(
+        directory.join("pyproject.toml"),
+        "[tool.gruff]\noutput-format = \"json\"\n\n[tool.gruff.lint]\nselect = [\"GR\"]\n",
+    )
+    .expect("test configuration should be written");
+    fs::write(
+        directory.join("definitions.py"),
+        "def public(path):\n    ...\n\ndef _non_public(path=None):  # noqa: GR001\n    ...\n\ndef public_suppressed(path):  # noqa: GR005\n    ...\n\ndef _non_public_suppressed(path):  # noqa: GR002\n    ...\n",
+    )
+    .expect("test source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    assert_eq!(output.status.code(), Some(1));
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 3);
+    assert_eq!(findings[0]["code"], "GR005");
+    assert_eq!(findings[0]["name"], "explicit-public-input-conventions");
+    assert_eq!(findings[1]["code"], "GR002");
+    assert_eq!(findings[2]["code"], "GR001");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--select", "ALL", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 3);
+    assert_eq!(findings[0]["code"], "GR005");
+    assert_eq!(findings[1]["code"], "GR002");
+    assert_eq!(findings[2]["code"], "GR001");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--ignore", "GR001", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 2);
+    assert_eq!(findings[0]["code"], "GR005");
+    assert_eq!(findings[1]["code"], "GR002");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--select", "GR005", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 1);
+    assert_eq!(findings[0]["code"], "GR005");
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }

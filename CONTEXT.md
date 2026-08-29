@@ -12,17 +12,21 @@ _Avoid_: Check, heuristic
 A source location where an enabled rule detects its prohibited code shape.
 _Avoid_: Error, issue, violation
 
-**Private definition**:
-A module-level function or method whose name starts with exactly one underscore and does not end with an underscore. Nested functions, dunder methods, name-mangled methods, and sunder protocol names are outside this term.
-_Avoid_: Internal callable, underscore function
+**Non-public definition**:
+A module-level function or method whose name starts with an underscore and does not end with an underscore. This includes `_name` and `__name` definitions; double-leading names are name-mangled in class scope. Nested functions, ordinary names, trailing-underscore names, sunder protocol names, and dunder methods are outside this term.
+_Avoid_: Private definition, internal callable, underscore function
+
+**Public definition**:
+Gruff's syntactic complement of a non-public definition. It includes ordinary names, trailing-underscore names, framework or protocol sunder names, and system-defined dunder methods; it does not assert that an interface is documented or exported.
+_Avoid_: Exported definition, API definition
 
 **Explicit input calling conventions**:
 A policy requiring every non-receiver, non-variadic input to a module-level function or method to be positional-only or keyword-only, so its calling convention is locally declared and runtime-enforced.
 _Avoid_: Kwargs-only definitions, named inputs
 
-**Required private inputs**:
-A policy requiring every non-receiver, non-variadic input to a private definition to have no default, so callers supply each value.
-_Avoid_: No private defaults, explicit private inputs
+**Required non-public inputs**:
+A policy requiring every non-receiver, non-variadic input to a non-public definition to have no default, so callers supply each value.
+_Avoid_: Required private inputs, no non-public defaults, explicit non-public inputs
 
 **Package dunder all**:
 A policy requiring every successfully completing package-initializer path with public bindings to finish with `__all__` bound.
