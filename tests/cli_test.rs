@@ -1192,3 +1192,153 @@ fn resolves_explicit_config_patterns_from_current_directory() {
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }
+
+#[test]
+fn documents_every_rule_with_canonical_sections() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let directory = root.join("docs/rules");
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["rule", "--all", "--output-format", "json"])
+        .output()
+        .expect("gruff should explain every rule");
+    let rules: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+
+    let documented: Vec<PathBuf> = fs::read_dir(&directory)
+        .expect("rule doc directory should be readable")
+        .map(|entry| entry.expect("rule document should be readable").path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "md"))
+        .collect();
+    assert_eq!(documented.len(), rules.as_array().unwrap().len());
+
+    for rule in rules.as_array().unwrap() {
+        let code = rule["code"].as_str().unwrap();
+        let name = rule["name"].as_str().unwrap();
+        let document = fs::read_to_string(directory.join(format!("{name}.md")))
+            .expect("every rule should have a rule document");
+        assert_eq!(document, rule["explanation"].as_str().unwrap());
+        assert!(
+            document.starts_with(&format!("# {name} ({code})\n")),
+            "unexpected title in {name}.md"
+        );
+        // Without the trailing newline, `--all` text output glues rules together.
+        assert!(
+            document.ends_with('\n'),
+            "{name}.md should end with a newline"
+        );
+        let sections: Vec<&str> = document
+            .lines()
+            .filter(|line| line.starts_with("## "))
+            .collect();
+        assert_eq!(
+            sections,
+            [
+                "## What it does",
+                "## Why",
+                "## Example",
+                "## When to suppress"
+            ],
+            "unexpected sections in {name}.md"
+        );
+    }
+}
+
+#[test]
+fn explains_rule_by_code_and_name() {
+    let by_code = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["rule", "GR004"])
+        .output()
+        .expect("gruff should explain a rule code");
+    let by_name = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["rule", "final-constants"])
+        .output()
+        .expect("gruff should explain a rule name");
+
+    assert!(by_code.status.success());
+    assert!(by_code.stderr.is_empty());
+    let explanation = String::from_utf8_lossy(&by_code.stdout);
+    assert!(explanation.starts_with("# final-constants (GR004)\n"));
+    assert!(explanation.contains("\n## When to suppress\n"));
+    assert_eq!(by_code.stdout, by_name.stdout);
+
+    let json = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["rule", "GR004", "--output-format", "json"])
+        .output()
+        .expect("gruff should explain a rule as JSON");
+    assert!(json.status.success());
+    let rule: Value = serde_json::from_slice(&json.stdout).expect("output should be JSON");
+    let rule = rule.as_object().expect("one rule should be an object");
+    // The parsed map is sorted, so this pins the key set rather than the emitted order.
+    assert_eq!(
+        rule.keys().collect::<Vec<_>>(),
+        ["code", "explanation", "name", "summary"]
+    );
+    assert_eq!(rule["code"], "GR004");
+    assert_eq!(rule["name"], "final-constants");
+    assert_eq!(
+        rule["explanation"].as_str().unwrap().as_bytes(),
+        by_code.stdout
+    );
+}
+
+#[test]
+fn explains_all_rules() {
+    let text = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["rule", "--all"])
+        .output()
+        .expect("gruff should explain every rule");
+    let json = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["rule", "--all", "--output-format", "json"])
+        .output()
+        .expect("gruff should explain every rule as JSON");
+
+    assert!(json.status.success());
+    let rules: Value = serde_json::from_slice(&json.stdout).expect("output should be JSON");
+    let rules = rules.as_array().expect("every rule should be an entry");
+    assert!(!rules.is_empty());
+
+    assert!(text.status.success());
+    assert!(text.stderr.is_empty());
+    let explanations = String::from_utf8_lossy(&text.stdout);
+    assert_eq!(
+        explanations.matches("\n## When to suppress\n").count(),
+        rules.len()
+    );
+    assert!(explanations.contains("# no-non-public-docstrings (GR006)\n"));
+
+    let final_constants = rules
+        .iter()
+        .find(|rule| rule["code"] == "GR004")
+        .expect("GR004 should be explained");
+    assert_eq!(final_constants["name"], "final-constants");
+    assert_eq!(
+        final_constants["summary"],
+        "Uppercase names and `Final` annotations appear together."
+    );
+    assert!(
+        final_constants["explanation"]
+            .as_str()
+            .unwrap()
+            .starts_with("# final-constants (GR004)\n")
+    );
+}
+
+#[test]
+fn rejects_unknown_rule() {
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["rule", "GR999"])
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Unknown rule: GR999"));
+    assert!(stderr.contains("GR001"));
+
+    // Codes and names are matched literally, so a lowercase code is not a rule.
+    let lowercased = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["rule", "gr004"])
+        .output()
+        .expect("gruff should run");
+    assert_eq!(lowercased.status.code(), Some(2));
+}

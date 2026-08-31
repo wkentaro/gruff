@@ -9,6 +9,8 @@ use crate::analysis::find_non_public_definitions;
 
 pub(crate) const CODE: &str = "GR001";
 pub(crate) const NAME: &str = "explicit-non-public-input-conventions";
+pub(crate) const SUMMARY: &str =
+    "Every fixed input to a non-public callable has an explicit calling convention.";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     check_definitions(find_non_public_definitions(statements))

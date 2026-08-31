@@ -8,6 +8,7 @@ use crate::analysis::find_non_public_definitions;
 
 pub(crate) const CODE: &str = "GR002";
 pub(crate) const NAME: &str = "required-non-public-inputs";
+pub(crate) const SUMMARY: &str = "Callers supply every fixed input to non-public callables.";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     find_non_public_definitions(statements)

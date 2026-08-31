@@ -36,6 +36,10 @@ _Avoid_: Explicit exports, package exports
 A policy requiring every simple-name constant binding to pair an uppercase name with a `Final` annotation in every lexical scope.
 _Avoid_: Uppercase variables, final variables
 
+**Rule doc**:
+The canonical document for one rule, with four fixed sections: what it does, why, an example, and when to suppress. Every surface that explains a rule presents this document unchanged. The `explanation` key of `gruff rule --output-format json` is the one licensed exception; it follows Ruff's JSON shape but carries the whole rule doc, title included.
+_Avoid_: Rule page, rule explanation
+
 **Review miner**:
 A development tool that extracts candidate review episodes from local Codex and Claude histories for agent and human evaluation of possible rules. Its output is temporary evidence, never a rule or finding.
 _Avoid_: Linter, detector
