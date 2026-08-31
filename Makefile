@@ -1,6 +1,7 @@
 RUFF := uvx --from ruff==0.16.4 ruff
+MKDOCS := uvx --from mkdocs==1.6.1 --with mkdocs-material==9.7.7 mkdocs
 
-.PHONY: help format lint test
+.PHONY: help format lint test docs
 .DEFAULT_GOAL := help
 
 define exec
@@ -26,3 +27,6 @@ format:  # Format code
 
 test:  # Test code
 	$(call exec,cargo test --all-targets --locked)
+
+docs:  # Build the documentation site
+	$(call exec,$(MKDOCS) build --strict)

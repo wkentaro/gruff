@@ -1194,7 +1194,7 @@ fn resolves_explicit_config_patterns_from_current_directory() {
 }
 
 #[test]
-fn documents_every_rule_with_canonical_sections() {
+fn binds_every_rule_to_its_doc_and_tables() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let directory = root.join("docs/rules");
     let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
@@ -1210,9 +1210,22 @@ fn documents_every_rule_with_canonical_sections() {
         .collect();
     assert_eq!(documented.len(), rules.as_array().unwrap().len());
 
+    let readme = fs::read_to_string(root.join("README.md")).expect("README should be readable");
+    let index =
+        fs::read_to_string(root.join("docs/index.md")).expect("site home should be readable");
+    assert_eq!(
+        readme.matches("\n| GR").count(),
+        rules.as_array().unwrap().len()
+    );
+    assert_eq!(
+        index.matches("\n| GR").count(),
+        rules.as_array().unwrap().len()
+    );
+
     for rule in rules.as_array().unwrap() {
         let code = rule["code"].as_str().unwrap();
         let name = rule["name"].as_str().unwrap();
+        let summary = rule["summary"].as_str().unwrap();
         let document = fs::read_to_string(directory.join(format!("{name}.md")))
             .expect("every rule should have a rule document");
         assert_eq!(document, rule["explanation"].as_str().unwrap());
@@ -1224,6 +1237,18 @@ fn documents_every_rule_with_canonical_sections() {
         assert!(
             document.ends_with('\n'),
             "{name}.md should end with a newline"
+        );
+        assert!(
+            readme.contains(&format!(
+                "| {code} | [`{name}`](https://wkentaro.github.io/gruff/rules/{name}/) | {summary} |"
+            )),
+            "README.md should carry the {code} row"
+        );
+        assert!(
+            index.contains(&format!(
+                "| {code} | [`{name}`](rules/{name}.md) | {summary} |"
+            )),
+            "docs/index.md should carry the {code} row"
         );
         let sections: Vec<&str> = document
             .lines()
