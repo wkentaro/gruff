@@ -1,9 +1,114 @@
+use std::collections::HashSet;
+
 use ruff_python_ast::Expr;
 use ruff_python_ast::Stmt;
 use ruff_python_ast::StmtFunctionDef;
+use ruff_python_ast::token::TokenKind;
+use ruff_python_ast::token::Tokens;
 use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::visitor::walk_stmt;
+use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
+
+pub(crate) struct CommentLine<'a> {
+    pub(crate) line_index: usize,
+    pub(crate) range: TextRange,
+    pub(crate) text: &'a str,
+    pub(crate) is_own_line: bool,
+}
+
+pub(crate) struct CommentBlock<'a> {
+    pub(crate) lines: Vec<CommentLine<'a>>,
+}
+
+pub(crate) struct CommentAnalysis<'a> {
+    pub(crate) blocks: Vec<CommentBlock<'a>>,
+    // Blanks out every comment, plus string tokens that begin on an assert or comparison line, so
+    // prose in the source cannot pass for code. Indexed by physical line, like a comment's line
+    // index.
+    pub(crate) masked_lines: Vec<String>,
+}
+
+pub(crate) fn analyze_comments<'a>(source: &'a str, tokens: &Tokens) -> CommentAnalysis<'a> {
+    let line_starts: Vec<_> = std::iter::once(0)
+        .chain(
+            source
+                .bytes()
+                .enumerate()
+                .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
+        )
+        .collect();
+    let comparison_lines: HashSet<_> = tokens
+        .iter()
+        .filter(|token| {
+            matches!(
+                token.kind(),
+                TokenKind::Assert
+                    | TokenKind::EqEqual
+                    | TokenKind::NotEqual
+                    | TokenKind::Less
+                    | TokenKind::Greater
+                    | TokenKind::LessEqual
+                    | TokenKind::GreaterEqual
+            )
+        })
+        .map(|token| get_line_index(&line_starts, token.start().to_usize()))
+        .collect();
+    let mut stripped = source.as_bytes().to_vec();
+    let mut comments = Vec::new();
+
+    for token in tokens {
+        let line_index = get_line_index(&line_starts, token.start().to_usize());
+        match token.kind() {
+            TokenKind::Comment => {
+                blank_range(&mut stripped, token.range());
+                comments.push((line_index, token.range()));
+            }
+            TokenKind::String | TokenKind::FStringMiddle | TokenKind::TStringMiddle
+                if comparison_lines.contains(&line_index) =>
+            {
+                blank_range(&mut stripped, token.range());
+            }
+            _ => {}
+        }
+    }
+
+    let masked_lines = get_lines(stripped);
+    let mut blocks: Vec<CommentBlock> = Vec::new();
+    for (line_index, range) in comments {
+        let comment = CommentLine {
+            line_index,
+            range,
+            text: &source[range],
+            // A `#` comment runs to end of line, so it owns its line when nothing but blanks
+            // precedes it.
+            is_own_line: source[line_starts[line_index]..range.start().to_usize()]
+                .trim()
+                .is_empty(),
+        };
+        let extends_block = comment.is_own_line
+            && blocks.last().is_some_and(|block| {
+                let previous = block.lines.last().expect("comment blocks are non-empty");
+                previous.is_own_line && previous.line_index + 1 == comment.line_index
+            });
+        if extends_block {
+            blocks
+                .last_mut()
+                .expect("an extendable block exists")
+                .lines
+                .push(comment);
+        } else {
+            blocks.push(CommentBlock {
+                lines: vec![comment],
+            });
+        }
+    }
+
+    CommentAnalysis {
+        blocks,
+        masked_lines,
+    }
+}
 
 // Returns the index of the hash the directive parses from, so a caller can slice the prose in front
 // of it. In a hash run that is the last hash, so the sliced prose keeps the earlier ones. A
@@ -60,6 +165,26 @@ fn is_rule_code(rule: &str) -> bool {
     digits.len() < rule.len()
         && !digits.is_empty()
         && digits.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn get_line_index(line_starts: &[usize], offset: usize) -> usize {
+    line_starts.partition_point(|start| *start <= offset) - 1
+}
+
+fn blank_range(source: &mut [u8], range: TextRange) {
+    for byte in &mut source[range.start().to_usize()..range.end().to_usize()] {
+        if !matches!(*byte, b'\n' | b'\r') {
+            *byte = b' ';
+        }
+    }
+}
+
+fn get_lines(source: Vec<u8>) -> Vec<String> {
+    String::from_utf8(source)
+        .expect("blanking token spans preserves UTF-8")
+        .lines()
+        .map(str::to_owned)
+        .collect()
 }
 
 pub(crate) struct Input<'a> {

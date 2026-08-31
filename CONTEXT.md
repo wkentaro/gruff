@@ -36,6 +36,10 @@ _Avoid_: Explicit exports, package exports
 A policy requiring every simple-name constant binding to pair an uppercase name with a `Final` annotation in every lexical scope.
 _Avoid_: Uppercase variables, final variables
 
+**Comment subsumption**:
+A lexical policy identifying a one-line own-line comment whose content words are all present in the window it annotates, the next line carrying code, with comments counting as blank, plus the three physical lines after it, after fixed stopword and synonym handling.
+_Avoid_: Obvious comment, redundant comment, narrative-comment heuristic
+
 **Rule doc**:
 The canonical document for one rule, with four fixed sections: what it does, why, an example, and when to suppress. Every surface that explains a rule presents this document unchanged. The `explanation` key of `gruff rule --output-format json` is the one licensed exception; it follows Ruff's JSON shape but carries the whole rule doc, title included.
 _Avoid_: Rule page, rule explanation

@@ -4,6 +4,11 @@ use std::process::Command;
 
 use serde_json::Value;
 
+fn place_below_header(source: &str) -> String {
+    // GR007 never flags the first five physical lines, so its fixtures start below that floor.
+    format!("\n\n\n\n\n{source}")
+}
+
 fn create_temp_directory(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("gruff-cli-test-{}-{name}", std::process::id()));
     if path.exists() {
@@ -277,6 +282,313 @@ fn checks_no_non_public_docstrings_selection_and_suppression() {
     assert!(output.status.success());
     assert_eq!(output.stdout, b"All checks passed!\n");
     assert!(String::from_utf8_lossy(&output.stderr).contains("No rules are enabled"));
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn flags_no_subsumed_comments_conformance_cases() {
+    let directory = create_temp_directory("no-subsumed-comments-findings");
+    let mut sources = [
+        (
+            "get_element.py",
+            "async def find_element():\n    # Get the element\n    element = await self.browser_session.get_dom_element_by_index(index)\n",
+            (7, 5),
+        ),
+        (
+            "load_examples.py",
+            "# Load the examples.\nconfig = _load_examples(config, ...)\n",
+            (6, 1),
+        ),
+        (
+            "patch_embedding.py",
+            "# Patch embedding\nself.patch_embed = PatchEmbedding(...)\n",
+            (6, 1),
+        ),
+        (
+            "return_type.py",
+            "# Get return type from last converter.\nrt = _AnnotationExtractor(last).get_return_type()\nif rt:\n    pipe_converter.__annotations__[\"return\"] = rt\n",
+            (6, 1),
+        ),
+        (
+            "rounded_rectangle.py",
+            "# Draw the rounded rectangle background\ndraw.rounded_rectangle(\n    tuple(box_xyxy),\n    radius=border_radius,\n    fill=background_color,\n)\n",
+            (6, 1),
+        ),
+        (
+            "url_components.py",
+            "# Test for url components\ndef test_url_with_components():\n    pass\n",
+            (6, 1),
+        ),
+        (
+            "vit_backbone.py",
+            "# ViT backbone\nvit_backbone = ViT(...)\n",
+            (6, 1),
+        ),
+    ];
+    sources.sort_unstable_by_key(|(name, _, _)| *name);
+    for (name, source, _) in sources {
+        fs::write(directory.join(name), place_below_header(source))
+            .expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR007",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), sources.len());
+    for (finding, (name, _, (row, column))) in findings.as_array().unwrap().iter().zip(sources) {
+        assert!(finding["filename"].as_str().unwrap().ends_with(name));
+        assert_eq!(finding["code"], "GR007");
+        assert_eq!(finding["name"], "no-subsumed-comments");
+        assert_eq!(
+            finding["message"],
+            "One-line comment restates the statement it annotates; delete it or state what the code cannot"
+        );
+        assert_eq!(finding["location"]["row"], row);
+        assert_eq!(finding["location"]["column"], column);
+    }
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn allows_no_subsumed_comments_conformance_cases() {
+    let directory = create_temp_directory("no-subsumed-comments-allowed");
+    let sources = [
+        (
+            "justified_block.py",
+            "# Get the element\n# The cache avoids a second browser request.\nelement = get_element()\n",
+        ),
+        (
+            "tensor_shape.py",
+            "# (B, N, num_heads, d)\nvalue = value.view(B, N, num_heads, d)\n",
+        ),
+        (
+            "sphinx_attribute.py",
+            "#: A UUID parameter.\nuuid_parameter = UUID\n",
+        ),
+        (
+            "divider.py",
+            "# --- object name ---\nobject_name = get_object_name()\n",
+        ),
+        (
+            "scenario_state.py",
+            "# The response is logged\nassert response == \"logged\"\n",
+        ),
+        (
+            "additional_information.py",
+            "# the default value is kept normalized to the type of the choice\ndefault_value = normalize(choice, choice_type)\n",
+        ),
+    ];
+    for (name, source) in sources {
+        fs::write(directory.join(name), place_below_header(source))
+            .expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR007",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"[]\n");
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn checks_no_subsumed_comments_boundaries_synonyms_and_suppression() {
+    let directory = create_temp_directory("no-subsumed-comments-boundaries");
+    fs::write(
+        directory.join("pyproject.toml"),
+        "[tool.gruff.lint]\nper-file-ignores = { \"ignored.py\" = [\"GR007\"] }\n",
+    )
+    .expect("test configuration should be written");
+    // Columns: file name, source, whether GR007 flags it, whether it is placed below the shared
+    // header. The header-floor fixture is the one case that must sit at the top of its file.
+    let sources = [
+        (
+            "first_five_lines.py",
+            "\n\n\n\n# Get the element\nelement = get_element()\n",
+            false,
+            false,
+        ),
+        (
+            "comment_between.py",
+            "# Get the element\n\n# helper note\nelement = get_element()\n",
+            true,
+            true,
+        ),
+        (
+            "trailing.py",
+            "element = get_element()  # Get the element\nnext_element = get_element()\n",
+            false,
+            true,
+        ),
+        (
+            "single_word.py",
+            "# Element\nelement = get_element()\n",
+            false,
+            true,
+        ),
+        (
+            "synonym.py",
+            "# Check if user is active\nif user_active:\n    pass\n",
+            true,
+            true,
+        ),
+        (
+            "suppressed.py",
+            "# Get the element  # noqa: GR007\nelement = get_element()\n",
+            false,
+            true,
+        ),
+        (
+            "ignored.py",
+            "# Get the element\nelement = get_element()\n",
+            false,
+            true,
+        ),
+        (
+            "fstring_scenario.py",
+            "# The response text is logged\nassert response.text == f\"Logged {state}\"\n",
+            false,
+            true,
+        ),
+        (
+            "fstring_comparison_segment.py",
+            "# Expected logged\nvalue = f\"\"\"prefix\n{response == expected} logged\"\"\"\n",
+            false,
+            true,
+        ),
+        (
+            "multiple_hashes.py",
+            "## --- object name ---\nobject_name = get_object_name()\n",
+            false,
+            true,
+        ),
+        (
+            "acronym_digits.py",
+            "# HTTP server\nHTTP2Server()\n",
+            true,
+            true,
+        ),
+        (
+            "fstring_segments.py",
+            "# State logged\nassert response == f\"\"\"prefix\n{state} logged\"\"\"\n",
+            true,
+            true,
+        ),
+        (
+            "interior_blanks.py",
+            "# Build cached result\nresult = build(\n\n    value,\n\n    cached_result,\n)\n",
+            false,
+            true,
+        ),
+        (
+            "physical_line_window.py",
+            "# Build cached result\nresult = build(\n    value,\n)\n\ndef test_cached_result():\n    pass\n",
+            false,
+            true,
+        ),
+        (
+            "doubled_hash_directive.py",
+            "# Get the element  ## noqa: GR001\nelement = get_element()\n",
+            true,
+            true,
+        ),
+        (
+            "leading_blank_gap.py",
+            "# Get the element\n\n\n\nelement = get_element()\n",
+            true,
+            true,
+        ),
+    ];
+    for (name, source, _, places_below_header) in sources {
+        let source = if places_below_header {
+            place_below_header(source)
+        } else {
+            source.to_owned()
+        };
+        fs::write(directory.join(name), source).expect("boundary source should be written");
+    }
+    let mut expected_filenames: Vec<_> = sources
+        .iter()
+        .filter(|(_, _, is_flagged, _)| *is_flagged)
+        .map(|(name, _, _, _)| *name)
+        .collect();
+    expected_filenames.sort_unstable();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--select", "GR007", "--output-format", "json", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), expected_filenames.len());
+    for finding in findings.as_array().unwrap() {
+        assert_eq!(finding["code"], "GR007");
+    }
+    let filenames: Vec<_> = findings
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|finding| {
+            PathBuf::from(finding["filename"].as_str().unwrap())
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    assert_eq!(filenames, expected_filenames);
+
+    for selector in ["GR", "ALL"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                selector,
+                "--output-format",
+                "json",
+                "synonym.py",
+            ])
+            .current_dir(&directory)
+            .output()
+            .expect("gruff should run");
+        let findings: Value =
+            serde_json::from_slice(&output.stdout).expect("output should be JSON");
+        assert_eq!(findings.as_array().unwrap().len(), 1);
+        assert_eq!(findings[0]["code"], "GR007");
+    }
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }

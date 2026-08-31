@@ -7,7 +7,7 @@ Gruff reads configuration only from `pyproject.toml`:
 output-format = "full"
 
 [tool.gruff.lint]
-select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006"]
+select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006", "GR007"]
 ignore = []
 per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
