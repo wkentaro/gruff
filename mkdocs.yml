@@ -1,0 +1,50 @@
+site_name: Gruff
+site_description: An opinionated deterministic maintainability linter for Python
+site_url: https://wkentaro.github.io/gruff/
+repo_url: https://github.com/wkentaro/gruff
+edit_uri: ""
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - navigation.sections
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+# A rule doc missing from the nav fails the strict build.
+validation:
+  nav:
+    omitted_files: warn
+
+# ADRs and agent instructions are repository documents, not site pages.
+exclude_docs: |
+  adr/
+  agents/
+
+nav:
+  - Home: index.md
+  - Configuration: configuration.md
+  - Rules:
+      - rules/explicit-non-public-input-conventions.md
+      - rules/required-non-public-inputs.md
+      - rules/package-dunder-all.md
+      - rules/final-constants.md
+      - rules/explicit-public-input-conventions.md
+      - rules/no-non-public-docstrings.md

@@ -10,6 +10,7 @@ use super::Diagnostic;
 
 pub(crate) const CODE: &str = "GR004";
 pub(crate) const NAME: &str = "final-constants";
+pub(crate) const SUMMARY: &str = "Uppercase names and `Final` annotations appear together.";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     let mut visitor = FinalConstantVisitor {

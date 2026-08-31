@@ -7,6 +7,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
+use clap::ArgGroup;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
@@ -26,9 +27,14 @@ use serde::Serialize;
 mod analysis;
 mod rules;
 
+#[derive(Serialize)]
 struct Rule {
     code: &'static str,
     name: &'static str,
+    summary: &'static str,
+    #[serde(rename = "explanation")]
+    document: &'static str,
+    #[serde(skip)]
     check: fn(&Path, &[Stmt]) -> Vec<rules::Diagnostic>,
 }
 
@@ -36,31 +42,43 @@ const RULES: &[Rule] = &[
     Rule {
         code: rules::explicit_non_public_input_conventions::CODE,
         name: rules::explicit_non_public_input_conventions::NAME,
+        summary: rules::explicit_non_public_input_conventions::SUMMARY,
+        document: include_str!("../docs/rules/explicit-non-public-input-conventions.md"),
         check: rules::explicit_non_public_input_conventions::check,
     },
     Rule {
         code: rules::required_non_public_inputs::CODE,
         name: rules::required_non_public_inputs::NAME,
+        summary: rules::required_non_public_inputs::SUMMARY,
+        document: include_str!("../docs/rules/required-non-public-inputs.md"),
         check: rules::required_non_public_inputs::check,
     },
     Rule {
         code: rules::package_dunder_all::CODE,
         name: rules::package_dunder_all::NAME,
+        summary: rules::package_dunder_all::SUMMARY,
+        document: include_str!("../docs/rules/package-dunder-all.md"),
         check: rules::package_dunder_all::check,
     },
     Rule {
         code: rules::final_constants::CODE,
         name: rules::final_constants::NAME,
+        summary: rules::final_constants::SUMMARY,
+        document: include_str!("../docs/rules/final-constants.md"),
         check: rules::final_constants::check,
     },
     Rule {
         code: rules::explicit_public_input_conventions::CODE,
         name: rules::explicit_public_input_conventions::NAME,
+        summary: rules::explicit_public_input_conventions::SUMMARY,
+        document: include_str!("../docs/rules/explicit-public-input-conventions.md"),
         check: rules::explicit_public_input_conventions::check,
     },
     Rule {
         code: rules::no_non_public_docstrings::CODE,
         name: rules::no_non_public_docstrings::NAME,
+        summary: rules::no_non_public_docstrings::SUMMARY,
+        document: include_str!("../docs/rules/no-non-public-docstrings.md"),
         check: rules::no_non_public_docstrings::check,
     },
 ];
@@ -103,6 +121,9 @@ pub struct Arguments {
 enum Command {
     /// Run Gruff on the given files or directories
     Check(CheckArguments),
+
+    /// Explain a rule
+    Rule(RuleArguments),
 }
 
 #[derive(Debug, Args)]
@@ -147,6 +168,28 @@ struct CheckArguments {
     /// Ignore all configuration files
     #[arg(long, help_heading = "Global options")]
     isolated: bool,
+}
+
+#[derive(Debug, Args)]
+#[command(group = ArgGroup::new("selector").required(true))]
+struct RuleArguments {
+    /// Rule code or name to explain
+    #[arg(value_name = "RULE", group = "selector")]
+    rule: Option<String>,
+
+    /// Explain every rule
+    #[arg(long, group = "selector")]
+    all: bool,
+
+    /// Output serialization format for rule docs
+    #[arg(long, value_enum, default_value_t = RuleOutputFormat::Text)]
+    output_format: RuleOutputFormat,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum RuleOutputFormat {
+    Text,
+    Json,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, ValueEnum)]
@@ -245,7 +288,61 @@ struct JsonFinding<'a> {
 pub fn run(arguments: Arguments) -> Result<u8, RunError> {
     match arguments.command {
         Command::Check(arguments) => run_check(arguments),
+        Command::Rule(arguments) => run_rule(arguments),
     }
+}
+
+fn run_rule(arguments: RuleArguments) -> Result<u8, RunError> {
+    let stdout = io::stdout();
+    let mut writer = stdout.lock();
+    // A rule selector emits one JSON object; --all emits an array.
+    let result = match &arguments.rule {
+        Some(selector) => {
+            let rule = find_rule(selector)?;
+            match arguments.output_format {
+                RuleOutputFormat::Text => print_rule_text(&mut writer, &[rule]),
+                RuleOutputFormat::Json => print_rule_json(&mut writer, rule),
+            }
+        }
+        None => match arguments.output_format {
+            RuleOutputFormat::Text => {
+                print_rule_text(&mut writer, &RULES.iter().collect::<Vec<_>>())
+            }
+            RuleOutputFormat::Json => print_rule_json(&mut writer, &RULES),
+        },
+    };
+    handle_output_result(result)?;
+
+    Ok(0)
+}
+
+fn find_rule(selector: &str) -> Result<&'static Rule, RunError> {
+    RULES
+        .iter()
+        .find(|rule| rule.code == selector || rule.name == selector)
+        .ok_or_else(|| {
+            let codes: Vec<&str> = RULES.iter().map(|rule| rule.code).collect();
+            RunError(format!(
+                "Unknown rule: {selector}. Known rules: {} (use a code or its kebab-case name).",
+                codes.join(", ")
+            ))
+        })
+}
+
+fn print_rule_text(writer: &mut impl Write, rules: &[&Rule]) -> io::Result<()> {
+    for (index, rule) in rules.iter().enumerate() {
+        if index > 0 {
+            writeln!(writer)?;
+        }
+        write!(writer, "{}", rule.document)?;
+    }
+
+    Ok(())
+}
+
+fn print_rule_json(writer: &mut impl Write, value: &impl Serialize) -> io::Result<()> {
+    let json = serde_json::to_string_pretty(value).map_err(io::Error::other)?;
+    writeln!(writer, "{json}")
 }
 
 fn run_check(arguments: CheckArguments) -> Result<u8, RunError> {

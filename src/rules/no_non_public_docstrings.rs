@@ -9,6 +9,8 @@ use crate::analysis::find_non_public_definitions;
 
 pub(crate) const CODE: &str = "GR006";
 pub(crate) const NAME: &str = "no-non-public-docstrings";
+pub(crate) const SUMMARY: &str =
+    "Non-public definitions carry their purpose in their names instead of docstrings.";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     find_non_public_definitions(statements)

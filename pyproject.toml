@@ -21,6 +21,7 @@ classifiers = [
 
 [project.urls]
 Changelog = "https://github.com/wkentaro/gruff/blob/main/CHANGELOG.md"
+Documentation = "https://wkentaro.github.io/gruff/"
 Issues = "https://github.com/wkentaro/gruff/issues"
 Repository = "https://github.com/wkentaro/gruff"
 

@@ -18,6 +18,7 @@ use super::Diagnostic;
 
 pub(crate) const CODE: &str = "GR003";
 pub(crate) const NAME: &str = "package-dunder-all";
+pub(crate) const SUMMARY: &str = "Every public package import path defines `__all__`.";
 
 const MAX_STATES: usize = 32;
 const MAX_CONDITIONS: usize = 32;
