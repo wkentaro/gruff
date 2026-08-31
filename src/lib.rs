@@ -24,6 +24,9 @@ use ruff_text_size::TextRange;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::analysis::find_noqa_directive;
+use crate::analysis::matches_noqa_rules;
+
 mod analysis;
 mod rules;
 
@@ -783,27 +786,7 @@ fn find_noqa_row(source: &str, tokens: &Tokens, range: TextRange) -> usize {
 }
 
 fn is_noqa_directive(comment: &str, code: &str) -> bool {
-    let lowercase = comment.to_ascii_lowercase();
-    let Some(directive) = lowercase
-        .strip_prefix('#')
-        .and_then(|directive| directive.trim_start().strip_prefix("noqa"))
-    else {
-        return false;
-    };
-    if directive
-        .chars()
-        .next()
-        .is_some_and(|character| character != ':' && !character.is_ascii_whitespace())
-    {
-        return false;
-    }
-    let directive = directive.trim_start();
-    let Some(rules) = directive.strip_prefix(':') else {
-        return true;
-    };
-    rules
-        .split(|character: char| character == ',' || character.is_ascii_whitespace())
-        .any(|rule| rule.eq_ignore_ascii_case(code))
+    find_noqa_directive(comment).is_some_and(|(_, rules)| matches_noqa_rules(rules, code))
 }
 
 fn print_findings(findings: &[Finding], output_format: OutputFormat) -> Result<bool, RunError> {

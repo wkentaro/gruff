@@ -51,6 +51,10 @@ def format_cost_compat(value: float) -> str:  # noqa: GR005 -- contract accepts 
     return f"${value:.2f}"
 ```
 
+A bare `# noqa` suppresses every rule on the line, and `# noqa: GR001,GR002` suppresses only the codes it lists. Rule codes match case-sensitively, so `# noqa: gr005` suppresses nothing; the `noqa` keyword itself is case-insensitive.
+
+The directive does not have to start the comment. It may follow other comment text, as in `EXTERNAL_NAME = 1  # external spelling  # noqa: GR004`, or a doubled hash, as in `EXTERNAL_NAME = 1  ## noqa: GR004`. Prose after the code list is ignored, so `EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling` still suppresses GR004 alone. A hash glued to preceding text never starts a directive — stricter than Ruff, which reads it as a directive — so a `#` inside a URL is not read as one. Codes must be delimited, so `# noqa:GR001GR002` suppresses nothing — Ruff instead splits the run and suppresses both codes.
+
 Prefer an inline suppression because it keeps the exception next to its reason. For files made entirely of protocol implementations, use a per-file ignore instead.
 
 ## Recommended Ruff pairing

@@ -53,6 +53,31 @@ fn checks_config_suppression_json_and_exit_status() {
         "def _save(path):  # noqa: GR001\n    ...\n",
     )
     .expect("suppressed source should be written");
+    fs::write(
+        directory.join("noqa_without_codes.py"),
+        "def _save(path=None):  # noqa:\n    ...\n",
+    )
+    .expect("empty code list source should be written");
+    fs::write(
+        directory.join("url_fragment.py"),
+        "def _send(path):  # docs https://example.com/#noqa\n    ...\n",
+    )
+    .expect("URL fragment source should be written");
+    fs::write(
+        directory.join("code_list_cutoff.py"),
+        "def _save(path):  # noqa: nonsense GR001\n    ...\n",
+    )
+    .expect("code list cutoff source should be written");
+    fs::write(
+        directory.join("lowercase_code.py"),
+        "def _save(path):  # noqa: gr001\n    ...\n",
+    )
+    .expect("lowercase code source should be written");
+    fs::write(
+        directory.join("glued_codes.py"),
+        "def _save(path):  # noqa:GR001GR002\n    ...\n",
+    )
+    .expect("glued code list source should be written");
     fs::write(directory.join("ignored.py"), "def _send(path):\n    ...\n")
         .expect("ignored source should be written");
     fs::write(directory.join("invalid.py"), "def broken(\n")
@@ -67,19 +92,53 @@ fn checks_config_suppression_json_and_exit_status() {
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stderr.is_empty());
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
-    assert_eq!(findings.as_array().unwrap().len(), 2);
-    assert_eq!(findings[0]["code"], "GR001");
-    assert_eq!(findings[0]["name"], "explicit-non-public-input-conventions");
+    let findings = findings.as_array().unwrap();
+    let filenames: Vec<_> = findings
+        .iter()
+        .map(|finding| {
+            PathBuf::from(finding["filename"].as_str().unwrap())
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    // The suppression-shaped fixtures all fail to suppress: an empty code list names no rule, a
+    // URL fragment hash never opens a directive, a code list stops at its first non-code token,
+    // joined codes are one unreadable token, and a lowercase code is prose. The remaining files
+    // are an unsuppressed GR001 finding and a syntax failure.
     assert_eq!(
-        findings[0]["message"],
+        filenames,
+        [
+            "code_list_cutoff.py",
+            "finding.py",
+            "glued_codes.py",
+            "invalid.py",
+            "lowercase_code.py",
+            "noqa_without_codes.py",
+            "url_fragment.py",
+        ]
+    );
+    let find_by_filename = |name: &str| {
+        findings
+            .iter()
+            .find(|finding| finding["filename"].as_str().unwrap().ends_with(name))
+            .unwrap_or_else(|| panic!("{name} should carry a finding"))
+    };
+    let finding = find_by_filename("finding.py");
+    assert_eq!(finding["code"], "GR001");
+    assert_eq!(finding["name"], "explicit-non-public-input-conventions");
+    assert_eq!(
+        finding["message"],
         "Input `path` must be positional-only or keyword-only"
     );
-    assert_eq!(findings[0]["severity"], "error");
-    assert_eq!(findings[0]["location"]["row"], 1);
-    assert!(PathBuf::from(findings[0]["filename"].as_str().unwrap()).is_absolute());
-    assert_eq!(findings[1]["code"], "invalid-syntax");
-    assert_eq!(findings[1]["name"], "invalid-syntax");
-    assert_eq!(findings[1]["severity"], "error");
+    assert_eq!(finding["severity"], "error");
+    assert_eq!(finding["location"]["row"], 1);
+    assert!(PathBuf::from(finding["filename"].as_str().unwrap()).is_absolute());
+    let invalid = find_by_filename("invalid.py");
+    assert_eq!(invalid["code"], "invalid-syntax");
+    assert_eq!(invalid["name"], "invalid-syntax");
+    assert_eq!(invalid["severity"], "error");
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }
@@ -657,6 +716,7 @@ def build():
 _PRIVATE = 6
 DECLARATION: int
 qualified: typing.Final[int] = 7
+OTHER_CODE = 1  # noqa: GR001 -- GR004 is fine
 "#,
     )
     .expect("finding source should be written");
@@ -694,6 +754,7 @@ qualified: typing.Final[int] = 7
             1,
             "Final binding qualified must be named in UPPER_SNAKE_CASE",
         ),
+        (13, 1, "Constant OTHER_CODE must be annotated Final"),
     ];
     assert_eq!(findings.as_array().unwrap().len(), expected.len());
     for (finding, (row, column, message)) in findings.as_array().unwrap().iter().zip(expected) {
@@ -781,6 +842,10 @@ import module as IMPORTED
 from module import value as IMPORTED_VALUE
 SUPPRESSED = 1  # noqa: GR004 -- external spelling
 suppressed_variable: Final = 1  # noqa: GR004 -- framework state
+DOUBLED_HASH = 1  ## noqa: GR004 -- external spelling
+TRAILING_DIRECTIVE = 1  # external spelling  # noqa: GR004
+BARE_DIRECTIVE = 1  # noqa# external spelling
+HASHED_CODE_LIST = 1  # noqa: GR004#external spelling
 "#,
     )
     .expect("allowed source should be written");
