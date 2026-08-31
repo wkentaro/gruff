@@ -53,12 +53,14 @@ The first release tests five theses: inputs are easier to trace when definitions
 
 | Code | Rule | Policy |
 | --- | --- | --- |
-| GR001 | [`explicit-non-public-input-conventions`](#explicit-non-public-input-conventions-gr001) | Every fixed input to a non-public callable has an explicit calling convention. |
-| GR002 | [`required-non-public-inputs`](#required-non-public-inputs-gr002) | Callers supply every fixed input to non-public callables. |
-| GR003 | [`package-dunder-all`](#package-dunder-all-gr003) | Every public package import path defines `__all__`. |
-| GR004 | [`final-constants`](#final-constants-gr004) | Uppercase names and `Final` annotations appear together. |
-| GR005 | [`explicit-public-input-conventions`](#explicit-public-input-conventions-gr005) | Every fixed input to a public callable has an explicit calling convention. |
-| GR006 | [`no-non-public-docstrings`](#no-non-public-docstrings-gr006) | Non-public definitions carry their purpose in their names instead of docstrings. |
+| GR001 | [`explicit-non-public-input-conventions`](https://wkentaro.github.io/gruff/rules/explicit-non-public-input-conventions/) | Every fixed input to a non-public callable has an explicit calling convention. |
+| GR002 | [`required-non-public-inputs`](https://wkentaro.github.io/gruff/rules/required-non-public-inputs/) | Callers supply every fixed input to non-public callables. |
+| GR003 | [`package-dunder-all`](https://wkentaro.github.io/gruff/rules/package-dunder-all/) | Every public package import path defines `__all__`. |
+| GR004 | [`final-constants`](https://wkentaro.github.io/gruff/rules/final-constants/) | Uppercase names and `Final` annotations appear together. |
+| GR005 | [`explicit-public-input-conventions`](https://wkentaro.github.io/gruff/rules/explicit-public-input-conventions/) | Every fixed input to a public callable has an explicit calling convention. |
+| GR006 | [`no-non-public-docstrings`](https://wkentaro.github.io/gruff/rules/no-non-public-docstrings/) | Non-public definitions carry their purpose in their names instead of docstrings. |
+
+Each rule links to its rule doc, which states what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
 
 ## Configuration and CLI
 
@@ -91,131 +93,13 @@ Pass files or directories as paths. Directory discovery checks `.py`, `.pyi`, an
 
 Lint findings, including invalid Python syntax, exit with status 1. Configuration, I/O, and internal failures exit with status 2. Gruff does not rewrite source code in the first release.
 
-## Rule reference
+## Suppressing findings
 
-### `explicit-non-public-input-conventions` (GR001)
-
-Flags each fixed caller-supplied input to a non-public module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
-
-Before → after:
-
-```diff
--def _resize_image(data: bytes, width: int) -> bytes:
-+def _resize_image(data: bytes, /, *, width: int) -> bytes:
-     return resize(data, width=width)
-
- def make_thumbnail(data: bytes, /) -> bytes:
-     return _resize_image(data, width=512)
-```
-
-A non-public definition starts with an underscore and does not end with one. This includes `_name` and `__name` spellings; double-leading names are name-mangled in class scope. Ordinary, trailing-underscore, sunder, and dunder definitions are excluded.
-
-### `required-non-public-inputs` (GR002)
-
-Flags each fixed caller-supplied input to a non-public module-level function or method that has a default; implicit method receivers and variadic parameters are excluded.
-
-Before → after:
-
-```diff
--def _resize_image(*, data: bytes, width: int = 512) -> bytes:
-+def _resize_image(*, data: bytes, width: int) -> bytes:
-     return resize(data, width=width)
-
- def make_thumbnail(data: bytes, /) -> bytes:
--    return _resize_image(data=data)
-+    return _resize_image(data=data, width=512)
-```
-
-Choose the input shape before suppressing the rule. If callers never vary a value, remove the input and keep the value inside the non-public definition instead of making every caller repeat it. If callers vary the value, keep the input required and have callers supply it explicitly. Reserve a default and GR002 suppression for meaningful semantic policy that would otherwise be duplicated across callers.
-
-### `package-dunder-all` (GR003)
-
-Flags a package initializer when a successfully completing import path leaves a binding whose name does not start with an underscore without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file. Empty, underscore-prefixed-only, type-checking-only, and statically false paths do not require a manifest.
-
-Before → after:
-
-```diff
- from .client import Client
- from .errors import GruffError
-
-+__all__ = ["Client", "GruffError"]
-```
-
-### `final-constants` (GR004)
-
-Flags simple-name assignments when an uppercase name and a `Final` annotation do not appear together. The rule applies in module, class, and function scopes, including nested control flow. Enum members, type aliases, chained and unpacking assignments, augmented assignments, loop and context-manager targets, attributes, subscripts, and imports are excluded.
-
-Before → after:
-
-```diff
- from typing import Final
-
--THUMBNAIL_WIDTH = 512
--image_format: Final = "png"
-+THUMBNAIL_WIDTH: Final = 512
-+IMAGE_FORMAT: Final = "png"
-```
-
-`Final` prevents type checkers from accepting rebinding; it does not make mutable contents immutable. For example, a `Final[list[str]]` still permits `append`. Use an immutable value when the contents must not change.
-
-### `explicit-public-input-conventions` (GR005)
-
-Flags each fixed caller-supplied input to a public module-level function or method that is positional-or-keyword. It accepts and excludes the same input shapes as GR001.
-
-For this syntactic policy, public definitions are the complement of non-public definitions. They include ordinary names, public names with a trailing underscore, framework or protocol sunder hooks, and system-defined dunder methods; the label does not infer whether an interface is documented or exported.
-
-Before → after:
-
-```diff
--def resize_image(data: bytes, width: int) -> bytes:
-+def resize_image(data: bytes, /, *, width: int) -> bytes:
-     return resize(data, width=width)
-```
-
-For established libraries, enable GR001 first. Before enabling GR005, review public and protocol definitions for downstream compatibility; migrate compatible signatures and suppress contracts that must still accept both positional and keyword calls. `GR` and `ALL` enable both rules for greenfield projects and completed migrations.
-
-### `no-non-public-docstrings` (GR006)
-
-Flags a non-public module-level function or method when its first body statement is a string literal. Remove a redundant docstring; if the definition becomes unclear without it, rename the function or method. Keep non-obvious reasoning as ordinary comments inside the definition.
-
-Before → after:
-
-```diff
- def _load_config(*, path: Path) -> Config:
--    """Load configuration from a path."""
-     return Config.parse(path.read_text())
-```
-
-GR006 uses the same non-public definition boundary as GR001 and GR002. It reports the docstring literal, so an intentional exception places `# noqa: GR006` after a single-line docstring or after the closing quotes of a multiline docstring.
-
-### Exceptions
-
-Use a positional-only marker when an external contract intentionally accepts positional calls. Suppress GR001 or GR005 only when the contract must accept both positional and keyword calls. Suppress GR002 only when a default centralizes meaningful semantic policy that callers would otherwise duplicate. Suppress GR004 when a binding intentionally follows an external convention:
+Every rule doc states when to fix a finding and when to suppress it. Suppress with an inline `# noqa` comment carrying the rule code and the reason:
 
 ```python
-def _format_cost(value: float, /) -> str:
-    return f"${value:.2f}"
-
-
 def format_cost_compat(value: float) -> str:  # noqa: GR005 -- contract accepts both call styles
     return f"${value:.2f}"
-
-
-def _fetch(*, url: str, timeout: float = 30.0) -> bytes:  # noqa: GR002 -- service timeout policy
-    return fetch(url, timeout=timeout)
-
-
-EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling
-
-
-def _documented_hook() -> None:
-    """Required by the framework contract."""  # noqa: GR006 -- inherited documentation contract
-```
-
-For a dynamic package manifest, suppress GR003 on the reported binding whose name does not start with an underscore and state why deterministic source analysis does not apply:
-
-```python
-public = load_exports()  # noqa: GR003 -- exec() defines __all__ below
 ```
 
 Prefer an inline suppression because it keeps the exception next to its reason. For files made entirely of protocol implementations, use a per-file ignore instead.
