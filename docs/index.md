@@ -49,7 +49,7 @@ All rules are opt-in. Use an exact code such as `GR001` to adopt rules individua
 
 ## Rules at a glance
 
-The first release tests six theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, non-public definitions are easier to understand when their names carry their purpose, and comments are worth reading when they state more than the code beneath them.
+The first release tests seven theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, non-public definitions are easier to understand when their names carry their purpose, comments are worth reading when they state more than the code beneath them, and tests are worth running when an exception can still fail them.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
@@ -60,6 +60,7 @@ The first release tests six theses: inputs are easier to trace when definitions 
 | GR005 | [`explicit-public-input-conventions`](rules/explicit-public-input-conventions.md) | Every fixed input to a public callable has an explicit calling convention. |
 | GR006 | [`no-non-public-docstrings`](rules/no-non-public-docstrings.md) | Non-public definitions carry their purpose in their names instead of docstrings. |
 | GR007 | [`no-subsumed-comments`](rules/no-subsumed-comments.md) | One-line comments state something beyond the statements they annotate. |
+| GR008 | [`no-exception-swallowing-tests`](rules/no-exception-swallowing-tests.md) | Tests let exceptions propagate instead of swallowing them. |
 
 Each page above is the rule doc: what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
 

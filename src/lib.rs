@@ -97,6 +97,13 @@ const RULES: &[Rule] = &[
         document: include_str!("../docs/rules/no-subsumed-comments.md"),
         check: RuleCheck::Tokens(rules::no_subsumed_comments::check),
     },
+    Rule {
+        code: rules::no_exception_swallowing_tests::CODE,
+        name: rules::no_exception_swallowing_tests::NAME,
+        summary: rules::no_exception_swallowing_tests::SUMMARY,
+        document: include_str!("../docs/rules/no-exception-swallowing-tests.md"),
+        check: RuleCheck::Ast(rules::no_exception_swallowing_tests::check),
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",

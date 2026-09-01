@@ -40,6 +40,10 @@ _Avoid_: Uppercase variables, final variables
 A lexical policy identifying a one-line own-line comment whose content words are all present in the window it annotates, the next line carrying code, with comments counting as blank, plus the three physical lines after it, after fixed stopword and synonym handling.
 _Avoid_: Obvious comment, redundant comment, narrative-comment heuristic
 
+**Exception swallowing test**:
+A policy identifying an `except` clause inside a test definition whose body statements are each only a `pass`, an `...`, a bare `return`, or a skip call, after an optional docstring, so no exception it catches can fail the test; an `else` clause on the `try` exempts such a handler only when it makes no skip call. A test definition is a function or method whose name starts with `test` in a file named `test_*.py` or `*_test.py` and not lexically nested inside another function's body.
+_Avoid_: Empty except, silent failure, missing-assertion heuristic
+
 **Rule doc**:
 The canonical document for one rule, with four fixed sections: what it does, why, an example, and when to suppress. Every surface that explains a rule presents this document unchanged. The `explanation` key of `gruff rule --output-format json` is the one licensed exception; it follows Ruff's JSON shape but carries the whole rule doc, title included.
 _Avoid_: Rule page, rule explanation

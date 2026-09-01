@@ -594,6 +594,286 @@ fn checks_no_subsumed_comments_boundaries_synonyms_and_suppression() {
 }
 
 #[test]
+fn flags_no_exception_swallowing_tests_conformance_cases() {
+    let directory = create_temp_directory("no-exception-swallowing-tests-findings");
+    let mut sources = [
+        (
+            "test_async.py",
+            "async def test_fetch():\n    try:\n        await fetch()\n    except ValueError:\n        pass\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_bare_except.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except:\n        pass\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_bare_return.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except OSError:\n        return\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_cls_skiptest.py",
+            "class FetchTest(unittest.TestCase):\n    @classmethod\n    def test_fetch(cls):\n        try:\n            fetch()\n        except OSError:\n            cls.skipTest(\"x\")\n",
+            &[(6, 9)][..],
+        ),
+        (
+            "test_docstring_only.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        \"just a note\"\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_docstring_then_pass.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        \"\"\"The service is flaky.\"\"\"\n        pass\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_else_skip_handler.py",
+            "def test_fetch():\n    try:\n        result = fetch()\n    except ConnectionError:\n        pytest.skip(\"no net\")\n    else:\n        assert result\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_ellipsis.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        ...\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_except_star.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except* ValueError:\n        pass\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_multiline_tuple.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except (\n        ValueError,\n        OSError,\n    ):\n        pass\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_multiple_handlers.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        pass\n    except OSError:\n        pytest.skip(\"no net\")\n",
+            &[(4, 5), (6, 5)][..],
+        ),
+        (
+            "test_nested_function.py",
+            "def test_fetch():\n    def attempt():\n        try:\n            fetch()\n        except ValueError:\n            pass\n\n    attempt()\n",
+            &[(5, 9)][..],
+        ),
+        (
+            "test_nested_loop.py",
+            "def test_fetch():\n    for path in paths:\n        try:\n            fetch(path)\n        except ValueError:\n            pass\n",
+            &[(5, 9)][..],
+        ),
+        (
+            "test_pass.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        pass\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_sibling_reraise.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except OSError:\n        raise\n    except ValueError:\n        pass\n",
+            &[(6, 5)][..],
+        ),
+        (
+            "test_skip.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except Exception:\n        pytest.skip(\"flaky\")\n",
+            &[(4, 5)][..],
+        ),
+        (
+            "test_try_inside_else.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        pass\n    else:\n        try:\n            check()\n        except KeyError:\n            pass\n",
+            &[(9, 9)][..],
+        ),
+        (
+            "test_with_block.py",
+            "def test_fetch():\n    with client() as session:\n        try:\n            session.fetch()\n        except ValueError:\n            pass\n",
+            &[(5, 9)][..],
+        ),
+        (
+            "unittest_test.py",
+            "class FetchTest(unittest.TestCase):\n    def test_fetch(self):\n        try:\n            fetch()\n        except OSError:\n            self.skipTest(\"no net\")\n",
+            &[(5, 9)][..],
+        ),
+    ];
+    sources.sort_unstable_by_key(|(name, _, _)| *name);
+    for (name, source, _) in &sources {
+        fs::write(directory.join(name), source).expect("conformance source should be written");
+    }
+    let expected: Vec<(&str, (usize, usize))> = sources
+        .iter()
+        .flat_map(|(name, _, locations)| locations.iter().map(|location| (*name, *location)))
+        .collect();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR008",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), expected.len());
+    for (finding, (name, (row, column))) in findings.as_array().unwrap().iter().zip(expected) {
+        assert!(finding["filename"].as_str().unwrap().ends_with(name));
+        assert_eq!(finding["code"], "GR008");
+        assert_eq!(finding["name"], "no-exception-swallowing-tests");
+        assert_eq!(
+            finding["message"],
+            "Test swallows the exception, so it cannot fail; let it propagate, or use pytest.raises or a skip condition for the expected case"
+        );
+        assert_eq!(finding["location"]["row"], row);
+        assert_eq!(finding["location"]["column"], column);
+        assert_eq!(finding["noqa_row"], row);
+        // The range must span to the closing parenthesis, not stop on the `except` line.
+        if name == "test_multiline_tuple.py" {
+            assert_eq!(finding["end_location"]["row"], 7);
+            assert_eq!(finding["end_location"]["column"], 6);
+        }
+    }
+
+    for selector in ["GR", "ALL"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                selector,
+                "--output-format",
+                "json",
+                "test_pass.py",
+            ])
+            .current_dir(&directory)
+            .output()
+            .expect("gruff should run");
+        let findings: Value =
+            serde_json::from_slice(&output.stdout).expect("output should be JSON");
+        assert_eq!(findings.as_array().unwrap().len(), 1);
+        assert_eq!(findings[0]["code"], "GR008");
+    }
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn allows_no_exception_swallowing_tests_conformance_cases() {
+    let directory = create_temp_directory("no-exception-swallowing-tests-allowed");
+    let sources = [
+        (
+            "production.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        pass\n",
+        ),
+        (
+            "test_asserts.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError as error:\n        assert \"missing\" in str(error)\n",
+        ),
+        (
+            "test_class_in_helper.py",
+            "def make_case():\n    class TestFetch:\n        def test_fetch(self):\n            try:\n                fetch()\n            except ValueError:\n                pass\n\n    return TestFetch\n",
+        ),
+        (
+            "test_break.py",
+            "def test_fetch():\n    for path in paths:\n        try:\n            fetch(path)\n        except ValueError:\n            break\n",
+        ),
+        (
+            "test_continue.py",
+            "def test_fetch():\n    for path in paths:\n        try:\n            fetch(path)\n        except ValueError:\n            continue\n",
+        ),
+        (
+            "test_else_clause.py",
+            "def test_fetch_raises_value_error():\n    try:\n        fetch()\n    except ValueError:\n        pass\n    else:\n        raise AssertionError(\"expected ValueError\")\n",
+        ),
+        (
+            "test_fixture_hooks.py",
+            "class FetchTest(unittest.TestCase):\n    def setUp(self):\n        try:\n            connect()\n        except OSError:\n            self.skipTest(\"no net\")\n",
+        ),
+        (
+            "test_finally.py",
+            "def test_fetch():\n    try:\n        fetch()\n    finally:\n        close()\n",
+        ),
+        (
+            "test_helper.py",
+            "def build_client():\n    try:\n        fetch()\n    except ValueError:\n        pass\n",
+        ),
+        (
+            "test_logs.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        logger.warning(\"fetch failed\")\n        pass\n",
+        ),
+        (
+            "test_raises_context.py",
+            "def test_fetch():\n    with pytest.raises(ValueError):\n        fetch()\n",
+        ),
+        (
+            "test_return_none.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        return None\n",
+        ),
+        (
+            "test_reraise.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        raise\n\n\ndef test_chain():\n    try:\n        fetch()\n    except ValueError as error:\n        raise AssertionError from error\n",
+        ),
+        (
+            "test_module_level.py",
+            "try:\n    import fast\nexcept ImportError:\n    pass\n\n\ndef test_fetch():\n    assert fetch()\n",
+        ),
+        (
+            "test_skip_outside_handler.py",
+            "def test_fetch():\n    if not has_network:\n        pytest.skip(\"no network\")\n    assert fetch()\n",
+        ),
+        (
+            "test_skiptest_raise.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except OSError:\n        raise unittest.SkipTest(\"x\")\n",
+        ),
+        (
+            "test_suppress.py",
+            "def test_fetch():\n    with contextlib.suppress(ValueError):\n        fetch()\n    assert state()\n",
+        ),
+        // A bare name is not resolved to an import, so only the `pytest.skip` spelling counts.
+        (
+            "test_unqualified_skip.py",
+            "from pytest import skip\n\n\ndef test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        skip(\"flaky\")\n",
+        ),
+        (
+            "test_xfail.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        pytest.xfail(\"known\")\n",
+        ),
+        ("test_smoke_call.py", "def test_fetch():\n    fetch()\n"),
+        (
+            "test_suppressed.py",
+            "def test_fetch():\n    try:\n        fetch()\n    except ValueError:  # noqa: GR008\n        pass\n",
+        ),
+    ];
+    for (name, source) in sources {
+        fs::write(directory.join(name), source).expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR008",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"[]\n");
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn splits_input_convention_rules_under_prefix_selection() {
     let directory = create_temp_directory("split-input-conventions");
     fs::write(
