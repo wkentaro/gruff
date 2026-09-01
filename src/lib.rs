@@ -849,11 +849,13 @@ fn print_full(writer: &mut impl Write, findings: &[Finding]) -> io::Result<()> {
         writeln!(writer, "  |")?;
         writeln!(writer, "{} | {}", finding.location.row, finding.source_line)?;
         let padding = " ".repeat(finding.location.column.saturating_sub(1));
-        let width = finding
-            .end_location
-            .column
-            .saturating_sub(finding.location.column)
-            .max(1);
+        // Only the start line is displayed, so a range spanning rows underlines to its end.
+        let end_column = if finding.end_location.row > finding.location.row {
+            finding.source_line.chars().count() + 1
+        } else {
+            finding.end_location.column
+        };
+        let width = end_column.saturating_sub(finding.location.column).max(1);
         writeln!(
             writer,
             "  | {padding}{} {}",
