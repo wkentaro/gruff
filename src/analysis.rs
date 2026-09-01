@@ -30,14 +30,7 @@ pub(crate) struct CommentAnalysis<'a> {
 }
 
 pub(crate) fn analyze_comments<'a>(source: &'a str, tokens: &Tokens) -> CommentAnalysis<'a> {
-    let line_starts: Vec<_> = std::iter::once(0)
-        .chain(
-            source
-                .bytes()
-                .enumerate()
-                .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
-        )
-        .collect();
+    let line_starts = find_line_starts(source);
     let comparison_lines: HashSet<_> = tokens
         .iter()
         .filter(|token| {
@@ -167,7 +160,18 @@ fn is_rule_code(rule: &str) -> bool {
         && digits.bytes().all(|byte| byte.is_ascii_digit())
 }
 
-fn get_line_index(line_starts: &[usize], offset: usize) -> usize {
+pub(crate) fn find_line_starts(source: &str) -> Vec<usize> {
+    std::iter::once(0)
+        .chain(
+            source
+                .bytes()
+                .enumerate()
+                .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
+        )
+        .collect()
+}
+
+pub(crate) fn get_line_index(line_starts: &[usize], offset: usize) -> usize {
     line_starts.partition_point(|start| *start <= offset) - 1
 }
 
