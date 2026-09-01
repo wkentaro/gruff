@@ -23,6 +23,7 @@ use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 use serde::Deserialize;
 use serde::Serialize;
+use unicode_width::UnicodeWidthChar;
 
 use crate::analysis::find_line_starts;
 use crate::analysis::find_noqa_directive;
@@ -150,6 +151,7 @@ const DEFAULT_EXCLUDES: &[&str] = &[
     "site-packages",
     "venv",
 ];
+const TAB_WIDTH: usize = 4;
 
 #[derive(Debug, Parser)]
 #[command(name = "gruff", version, about)]
@@ -885,25 +887,48 @@ fn handle_output_result(result: io::Result<()>) -> Result<bool, RunError> {
 fn print_full(writer: &mut impl Write, findings: &[Finding]) -> io::Result<()> {
     for finding in findings {
         print_concise_finding(writer, finding)?;
-        writeln!(writer, "  |")?;
-        writeln!(writer, "{} | {}", finding.location.row, finding.source_line)?;
-        let padding = " ".repeat(finding.location.column.saturating_sub(1));
+        let row = finding.location.row.to_string();
+        let gutter = " ".repeat(row.len() + 1);
+        writeln!(writer, "{gutter}|")?;
+        writeln!(
+            writer,
+            "{row} | {}",
+            finding.source_line.replace('\t', &" ".repeat(TAB_WIDTH))
+        )?;
+        let characters: Vec<char> = finding.source_line.chars().collect();
+        let start = finding
+            .location
+            .column
+            .saturating_sub(1)
+            .min(characters.len());
         // Only the start line is displayed, so a range spanning rows underlines to its end.
         let end_column = if finding.end_location.row > finding.location.row {
-            finding.source_line.chars().count() + 1
+            characters.len() + 1
         } else {
             finding.end_location.column
         };
-        let width = end_column.saturating_sub(finding.location.column).max(1);
+        let end = end_column.saturating_sub(1).clamp(start, characters.len());
+        let padding = " ".repeat(measure_display_width(&characters[..start]));
+        let width = measure_display_width(&characters[start..end]).max(1);
         writeln!(
             writer,
-            "  | {padding}{} {}",
+            "{gutter}| {padding}{} {}",
             "^".repeat(width),
             finding.code
         )?;
         writeln!(writer)?;
     }
     print_summary(writer, findings)
+}
+
+fn measure_display_width(characters: &[char]) -> usize {
+    characters
+        .iter()
+        .map(|character| match character {
+            '\t' => TAB_WIDTH,
+            _ => character.width().unwrap_or(0),
+        })
+        .sum()
 }
 
 fn print_concise(writer: &mut impl Write, findings: &[Finding]) -> io::Result<()> {

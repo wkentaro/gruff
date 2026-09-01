@@ -2043,13 +2043,116 @@ fn underlines_finding_ranges_in_full_output() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     // The range ends on the `):` line, so the underline covers the start line's tail.
     assert!(
-        stdout.contains("4 |     except (\n  |     ^^^^^^^^ GR008\n"),
+        stdout.contains("  |\n4 |     except (\n  |     ^^^^^^^^ GR008\n"),
         "full output should underline `except (` to end of line, got:\n{stdout}"
     );
     // A same-row range keeps its exact width: `except ValueError` without the colon.
     assert!(
         stdout.contains("4 |     except ValueError:\n  |     ^^^^^^^^^^^^^^^^^ GR008\n"),
         "full output should underline the same-row range exactly, got:\n{stdout}"
+    );
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn aligns_full_output_carets_for_multi_digit_rows() {
+    let directory = create_temp_directory("full-output-row-width");
+    fs::write(
+        directory.join("test_padded.py"),
+        "def run(x: int) -> int:\n    a = 1\n    b = 2\n    c = 3\n    d = 4\n    e = 5\n    f = 6\n    g = 7\n    h = 8\n    i = 9\n    if not x:\n        return a\n    else:\n        return b\n",
+    )
+    .expect("padded source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR010",
+            "--output-format",
+            "full",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("   |\n11 |     if not x:\n   |     ^^^^^^^^ GR010\n"),
+        "full output should widen the gutter to the row number, got:\n{stdout}"
+    );
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn expands_tabs_in_full_output() {
+    let directory = create_temp_directory("full-output-tabs");
+    fs::write(
+        directory.join("test_tabs.py"),
+        "def run(x: int) -> int:\n\tif not x:\n\t\treturn 1\n\telse:\n\t\treturn 2\n",
+    )
+    .expect("tab-indented source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR010",
+            "--output-format",
+            "full",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("2 |     if not x:\n  |     ^^^^^^^^ GR010\n"),
+        "full output should expand the leading tab to four spaces, got:\n{stdout}"
+    );
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn measures_wide_characters_in_full_output() {
+    let directory = create_temp_directory("full-output-wide");
+    fs::write(
+        directory.join("test_wide.py"),
+        "def 日本語(x):\n    return x\n",
+    )
+    .expect("wide-character source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR005",
+            "--output-format",
+            "full",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // The prefix before the parameter spans eleven display columns, so padding by character count would mispoint.
+    assert!(
+        stdout.contains("1 | def 日本語(x):\n  |            ^ GR005\n"),
+        "full output should pad by display width, got:\n{stdout}"
     );
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
