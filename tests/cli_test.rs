@@ -874,6 +874,202 @@ fn allows_no_exception_swallowing_tests_conformance_cases() {
 }
 
 #[test]
+fn flags_no_guarded_tails_conformance_cases() {
+    let directory = create_temp_directory("no-guarded-tails-findings");
+    let mut sources = [
+        (
+            "async_function.py",
+            "async def refresh(session):\n    token = await session.token()\n    if token.is_expired:\n        await session.revoke(token)\n        if session.can_renew:\n            await session.renew()\n",
+            (3, 5),
+        ),
+        (
+            "docstring_prefix.py",
+            "def cleanup(session):\n    \"\"\"Release the session's resources.\"\"\"\n    if session.is_open:\n        session.flush()\n        if session.has_pending():\n            session.wait()\n",
+            (3, 5),
+        ),
+        // Ten physical lines of straight-line work, with no nested conditional.
+        (
+            "function_long_suite.py",
+            "def render(invoice):\n    header = build_header(invoice)\n    if invoice.line_items:\n        rows = []\n        for item in invoice.line_items:\n            rows.append(format_row(item))\n        total = compute_total(invoice)\n        footer = format_total(total)\n        body = join_rows(rows)\n        document = header + body + footer\n        log_render(invoice, document)\n        store(invoice, document)\n        return document\n",
+            (3, 5),
+        ),
+        // Four statements that reach ten physical lines only through the blank and comment lines
+        // between them.
+        (
+            "interior_blank_lines.py",
+            "def publish(article):\n    draft = load(article)\n    if draft.is_ready:\n        validate(draft)\n\n        # The queue rejects a second copy, so the guard runs here.\n\n        register(draft)\n\n        notify(draft)\n\n\n        publish_now(draft)\n",
+            (3, 5),
+        ),
+        (
+            "loop_nested_if.py",
+            "def sync(records):\n    for record in records:\n        load(record)\n        if record.is_dirty:\n            record.normalize()\n            if record.is_valid:\n                record.save()\n",
+            (4, 9),
+        ),
+        (
+            "nested_function.py",
+            "def build():\n    def apply(record):\n        prepare(record)\n        if record.is_active:\n            record.touch()\n            if record.is_stale:\n                record.refresh()\n\n    return apply\n",
+            (4, 9),
+        ),
+        // Only the outer of two directly nested trailing ifs is a direct child of the body, so the
+        // inner one waits for the run after the outer is inverted.
+        (
+            "nested_trailing_ifs.py",
+            "def apply():\n    job = fetch_job()\n    if job.is_ready:\n        prepare(job)\n        if job.is_urgent:\n            escalate(job)\n",
+            (3, 5),
+        ),
+        (
+            "while_loop.py",
+            "def drain(queue):\n    while queue:\n        item = queue.pop()\n        if item.is_valid:\n            record(item)\n            if item.is_last:\n                finish(item)\n",
+            (4, 9),
+        ),
+    ];
+    sources.sort_unstable_by_key(|(name, _, _)| *name);
+    for (name, source, _) in sources {
+        fs::write(directory.join(name), source).expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR009",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), sources.len());
+    for (finding, (name, _, (row, column))) in findings.as_array().unwrap().iter().zip(sources) {
+        assert!(finding["filename"].as_str().unwrap().ends_with(name));
+        assert_eq!(finding["code"], "GR009");
+        assert_eq!(finding["name"], "no-guarded-tails");
+        assert_eq!(
+            finding["message"],
+            "Trailing `if` nests the rest of the body in its condition; invert it into an early `return` or `continue` guard"
+        );
+        assert_eq!(finding["location"]["row"], row);
+        assert_eq!(finding["location"]["column"], column);
+        assert_eq!(finding["noqa_row"], row);
+    }
+
+    for selector in ["GR", "ALL"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                selector,
+                "--output-format",
+                "json",
+                "nested_trailing_ifs.py",
+            ])
+            .current_dir(&directory)
+            .output()
+            .expect("gruff should run");
+        let findings: Value =
+            serde_json::from_slice(&output.stdout).expect("output should be JSON");
+        assert_eq!(findings.as_array().unwrap().len(), 1);
+        assert_eq!(findings[0]["code"], "GR009");
+    }
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn allows_no_guarded_tails_conformance_cases() {
+    let directory = create_temp_directory("no-guarded-tails-allowed");
+    let sources = [
+        (
+            "class_body.py",
+            "class Service:\n    name = \"service\"\n    if TYPE_CHECKING:\n        client = None\n        if DEBUG:\n            trace = None\n",
+        ),
+        (
+            "except_body.py",
+            "def apply(job):\n    try:\n        prepare(job)\n    except OSError:\n        log(job)\n        if job.is_ready:\n            escalate(job)\n            if job.is_urgent:\n                notify(job)\n",
+        ),
+        (
+            "finally_body.py",
+            "def apply(job):\n    try:\n        prepare(job)\n    finally:\n        log(job)\n        if job.is_ready:\n            escalate(job)\n            if job.is_urgent:\n                notify(job)\n",
+        ),
+        (
+            "loop_else.py",
+            "def apply(jobs):\n    for job in jobs:\n        prepare(job)\n    else:\n        log(jobs)\n        if jobs:\n            escalate(jobs)\n            if len(jobs) > 1:\n                notify(jobs)\n",
+        ),
+        (
+            "match_only.py",
+            "def render(invoice):\n    header = build_header(invoice)\n    if invoice.line_items:\n        match invoice.status:\n            case \"paid\":\n                label = \"paid\"\n            case _:\n                label = \"due\"\n        return header + label\n",
+        ),
+        (
+            "module_level.py",
+            "config = load_config()\nif config.is_valid:\n    apply(config)\n    if config.is_strict:\n        enforce(config)\n",
+        ),
+        (
+            "not_last.py",
+            "def apply(job):\n    if job.is_ready:\n        prepare(job)\n        if job.is_urgent:\n            escalate(job)\n    finish(job)\n",
+        ),
+        // Nine physical lines, one short of the gate, with no nested conditional.
+        (
+            "sub_gate.py",
+            "def render(invoice):\n    header = build_header(invoice)\n    if invoice.line_items:\n        rows = []\n        for item in invoice.line_items:\n            rows.append(format_row(item))\n        total = compute_total(invoice)\n        footer = format_total(total)\n        body = join_rows(rows)\n        document = header + body + footer\n        log_render(invoice, document)\n        return document\n",
+        ),
+        (
+            "suppressed.py",
+            "def apply(job):\n    if job.is_ready:  # noqa: GR009 -- kept parallel with the sibling branch\n        prepare(job)\n        if job.is_urgent:\n            escalate(job)\n",
+        ),
+        (
+            "ternary_only.py",
+            "def render(invoice):\n    header = build_header(invoice)\n    if invoice.line_items:\n        total = compute_total(invoice)\n        label = \"paid\" if invoice.is_paid else \"due\"\n        return header + label + str(total)\n",
+        ),
+        (
+            "try_body.py",
+            "def apply(job):\n    try:\n        prepare(job)\n        if job.is_ready:\n            escalate(job)\n            if job.is_urgent:\n                notify(job)\n    except OSError:\n        log(job)\n",
+        ),
+        (
+            "with_body.py",
+            "def apply(job):\n    with lock(job):\n        prepare(job)\n        if job.is_ready:\n            escalate(job)\n            if job.is_urgent:\n                notify(job)\n",
+        ),
+        (
+            "with_elif.py",
+            "def apply(job):\n    if job.is_ready:\n        prepare(job)\n        if job.is_urgent:\n            escalate(job)\n    elif job.is_stale:\n        drop(job)\n",
+        ),
+        (
+            "with_else.py",
+            "def apply(job):\n    if job.is_ready:\n        prepare(job)\n        if job.is_urgent:\n            escalate(job)\n    else:\n        defer(job)\n",
+        ),
+    ];
+    for (name, source) in sources {
+        fs::write(directory.join(name), source).expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR009",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"[]\n");
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn splits_input_convention_rules_under_prefix_selection() {
     let directory = create_temp_directory("split-input-conventions");
     fs::write(

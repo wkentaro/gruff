@@ -44,6 +44,8 @@ struct Rule {
 #[derive(Clone, Copy)]
 enum RuleCheck {
     Ast(fn(&Path, &[Stmt]) -> Vec<rules::Diagnostic>),
+    // Physical line spans are a source fact that offsets in the tree do not carry.
+    SourceAst(fn(&str, &[Stmt]) -> Vec<rules::Diagnostic>),
     Tokens(fn(&str, &Tokens) -> Vec<rules::Diagnostic>),
 }
 
@@ -103,6 +105,13 @@ const RULES: &[Rule] = &[
         summary: rules::no_exception_swallowing_tests::SUMMARY,
         document: include_str!("../docs/rules/no-exception-swallowing-tests.md"),
         check: RuleCheck::Ast(rules::no_exception_swallowing_tests::check),
+    },
+    Rule {
+        code: rules::no_guarded_tails::CODE,
+        name: rules::no_guarded_tails::NAME,
+        summary: rules::no_guarded_tails::SUMMARY,
+        document: include_str!("../docs/rules/no-guarded-tails.md"),
+        check: RuleCheck::SourceAst(rules::no_guarded_tails::check),
     },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
@@ -732,6 +741,7 @@ fn check_source(path: &Path, source: &str, rules: &[&Rule]) -> Vec<Finding> {
     for rule in rules {
         let diagnostics = match rule.check {
             RuleCheck::Ast(check) => check(path, parsed.suite()),
+            RuleCheck::SourceAst(check) => check(source, parsed.suite()),
             RuleCheck::Tokens(check) => check(source, parsed.tokens()),
         };
         for diagnostic in diagnostics {
