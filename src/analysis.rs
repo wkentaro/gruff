@@ -274,7 +274,6 @@ fn is_static_method(definition: &StmtFunctionDef) -> bool {
 enum DefinitionScope {
     Module,
     Class,
-    Function,
 }
 
 struct DefinitionVisitor<'a> {
@@ -284,20 +283,19 @@ struct DefinitionVisitor<'a> {
 
 impl<'a> Visitor<'a> for DefinitionVisitor<'a> {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
-        let previous_scope = self.scope;
         match statement {
-            Stmt::FunctionDef(definition) => {
-                match previous_scope {
-                    DefinitionScope::Module => self.definitions.push((definition, false)),
-                    DefinitionScope::Class => self.definitions.push((definition, true)),
-                    DefinitionScope::Function => {}
-                }
-                self.scope = DefinitionScope::Function;
+            // Nothing written inside a body that only runs when called is itself a definition, so
+            // that body is left unwalked.
+            Stmt::FunctionDef(definition) => self
+                .definitions
+                .push((definition, matches!(self.scope, DefinitionScope::Class))),
+            Stmt::ClassDef(_) => {
+                let previous_scope = self.scope;
+                self.scope = DefinitionScope::Class;
+                walk_stmt(self, statement);
+                self.scope = previous_scope;
             }
-            Stmt::ClassDef(_) => self.scope = DefinitionScope::Class,
-            _ => {}
+            _ => walk_stmt(self, statement),
         }
-        walk_stmt(self, statement);
-        self.scope = previous_scope;
     }
 }
