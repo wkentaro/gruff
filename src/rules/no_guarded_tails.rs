@@ -1,6 +1,7 @@
 use ruff_python_ast::Stmt;
 use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::visitor::walk_stmt;
+use ruff_source_file::UniversalNewlines;
 use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 
@@ -35,7 +36,7 @@ fn count_lines(source: &str, suite: &[Stmt]) -> usize {
         return 0;
     };
     source[first.start().to_usize()..last.end().to_usize()]
-        .lines()
+        .universal_newlines()
         .count()
 }
 

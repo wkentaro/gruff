@@ -7,6 +7,9 @@ use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::token::Tokens;
 use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::visitor::walk_stmt;
+use ruff_source_file::LineIndex;
+use ruff_source_file::OneIndexed;
+use ruff_source_file::UniversalNewlines;
 use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
 
@@ -30,7 +33,7 @@ pub(crate) struct CommentAnalysis<'a> {
 }
 
 pub(crate) fn analyze_comments<'a>(source: &'a str, tokens: &Tokens) -> CommentAnalysis<'a> {
-    let line_starts = find_line_starts(source);
+    let index = LineIndex::from_source_text(source);
     let comparison_lines: HashSet<_> = tokens
         .iter()
         .filter(|token| {
@@ -45,13 +48,13 @@ pub(crate) fn analyze_comments<'a>(source: &'a str, tokens: &Tokens) -> CommentA
                     | TokenKind::GreaterEqual
             )
         })
-        .map(|token| get_line_index(&line_starts, token.start().to_usize()))
+        .map(|token| index.line_index(token.start()).to_zero_indexed())
         .collect();
     let mut stripped = source.as_bytes().to_vec();
     let mut comments = Vec::new();
 
     for token in tokens {
-        let line_index = get_line_index(&line_starts, token.start().to_usize());
+        let line_index = index.line_index(token.start()).to_zero_indexed();
         match token.kind() {
             TokenKind::Comment => {
                 blank_range(&mut stripped, token.range());
@@ -75,7 +78,9 @@ pub(crate) fn analyze_comments<'a>(source: &'a str, tokens: &Tokens) -> CommentA
             text: &source[range],
             // A `#` comment runs to end of line, so it owns its line when nothing but blanks
             // precedes it.
-            is_own_line: source[line_starts[line_index]..range.start().to_usize()]
+            is_own_line: source[index
+                .line_start(OneIndexed::from_zero_indexed(line_index), source)
+                .to_usize()..range.start().to_usize()]
                 .trim()
                 .is_empty(),
         };
@@ -160,21 +165,6 @@ fn is_rule_code(rule: &str) -> bool {
         && digits.bytes().all(|byte| byte.is_ascii_digit())
 }
 
-pub(crate) fn find_line_starts(source: &str) -> Vec<usize> {
-    std::iter::once(0)
-        .chain(
-            source
-                .bytes()
-                .enumerate()
-                .filter_map(|(index, byte)| (byte == b'\n').then_some(index + 1)),
-        )
-        .collect()
-}
-
-pub(crate) fn get_line_index(line_starts: &[usize], offset: usize) -> usize {
-    line_starts.partition_point(|start| *start <= offset) - 1
-}
-
 fn blank_range(source: &mut [u8], range: TextRange) {
     for byte in &mut source[range.start().to_usize()..range.end().to_usize()] {
         if !matches!(*byte, b'\n' | b'\r') {
@@ -186,8 +176,8 @@ fn blank_range(source: &mut [u8], range: TextRange) {
 fn get_lines(source: Vec<u8>) -> Vec<String> {
     String::from_utf8(source)
         .expect("blanking token spans preserves UTF-8")
-        .lines()
-        .map(str::to_owned)
+        .universal_newlines()
+        .map(|line| line.as_str().to_owned())
         .collect()
 }
 
