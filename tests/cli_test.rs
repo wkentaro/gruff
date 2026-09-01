@@ -1645,6 +1645,51 @@ fn formats_github_output() {
 }
 
 #[test]
+fn underlines_finding_ranges_in_full_output() {
+    let directory = create_temp_directory("full-output-underline");
+    fs::write(
+        directory.join("test_multiline.py"),
+        "def test_fetch():\n    try:\n        fetch()\n    except (\n        ValueError,\n        OSError,\n    ):\n        pass\n",
+    )
+    .expect("multi-line handler source should be written");
+    fs::write(
+        directory.join("test_singleline.py"),
+        "def test_fetch():\n    try:\n        fetch()\n    except ValueError:\n        pass\n",
+    )
+    .expect("single-line handler source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR008",
+            "--output-format",
+            "full",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // The range ends on the `):` line, so the underline covers the start line's tail.
+    assert!(
+        stdout.contains("4 |     except (\n  |     ^^^^^^^^ GR008\n"),
+        "full output should underline `except (` to end of line, got:\n{stdout}"
+    );
+    // A same-row range keeps its exact width: `except ValueError` without the colon.
+    assert!(
+        stdout.contains("4 |     except ValueError:\n  |     ^^^^^^^^^^^^^^^^^ GR008\n"),
+        "full output should underline the same-row range exactly, got:\n{stdout}"
+    );
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn warns_when_nearest_configs_disable_all_rules() {
     let directory = create_temp_directory("nearest-config");
     let nested = directory.join("nested");
