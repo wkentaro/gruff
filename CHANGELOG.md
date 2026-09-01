@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.0.5 - 2026-09-01
+
+### Added
+
+- `gruff rule` prints the rule doc for a rule code or name, with `--all` and `--output-format text|json`, and the same rule docs ship as a documentation site at https://wkentaro.github.io/gruff/. ([#56](https://github.com/wkentaro/gruff/pull/56))
+- Added opt-in GR007 to flag one-line comments subsumed by the statements they annotate. ([#57](https://github.com/wkentaro/gruff/pull/57))
+- Added opt-in GR008 to flag exception handlers in tests that only pass, return, or skip, leaving the test unable to fail. ([#60](https://github.com/wkentaro/gruff/pull/60))
+- Added opt-in GR009 to flag a trailing else-less `if` that nests the rest of a function or loop body instead of inverting into a `return` or `continue` guard. ([#64](https://github.com/wkentaro/gruff/pull/64))
+- Added opt-in GR010 to flag an `if` statement with a plain `else` whose condition is negated, where swapping the branches states the condition positively. ([#69](https://github.com/wkentaro/gruff/pull/69))
+
+### Changed
+
+- Aligned `# noqa` lexing with Ruff on the common forms: directives may follow other comment text or a doubled hash, code lists end at the first non-code token, and rule codes now match case-sensitively. ([#57](https://github.com/wkentaro/gruff/pull/57))
+
+### Fixed
+
+- Fixed full output rendering a single mispointed caret for a finding whose range spans lines; the underline now extends to the end of the start line. ([#66](https://github.com/wkentaro/gruff/pull/66))
+- GR001, GR002, GR005, and GR006 no longer flag methods of a class defined inside a function; like nested functions, those methods sit outside the definition concept. ([#67](https://github.com/wkentaro/gruff/pull/67))
+- Fixed the superquadratic `# noqa` lookup that made comment-dense files take tens of seconds to check; suppression and offset lookups now resolve through a shared per-file line index. ([#71](https://github.com/wkentaro/gruff/pull/71))
+
+
 ## 0.0.4 - 2026-08-29
 
 ### Added
