@@ -13,7 +13,7 @@ A source location where an enabled rule detects its prohibited code shape.
 _Avoid_: Error, issue, violation
 
 **Non-public definition**:
-A module-level function or method whose name starts with an underscore and does not end with an underscore. This includes `_name` and `__name` definitions; double-leading names are name-mangled in class scope. Nested functions, ordinary names, trailing-underscore names, sunder protocol names, and dunder methods are outside this term.
+A module-level function or method whose name starts with an underscore and does not end with an underscore. This includes `_name` and `__name` definitions; double-leading names are name-mangled in class scope. Nested functions, methods of a class defined inside a function, ordinary names, trailing-underscore names, sunder protocol names, and dunder methods are outside this term.
 _Avoid_: Private definition, internal callable, underscore function
 
 **Public definition**:

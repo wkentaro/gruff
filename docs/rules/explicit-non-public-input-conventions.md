@@ -4,7 +4,7 @@
 
 Flags each fixed caller-supplied input to a non-public module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
 
-A non-public definition starts with an underscore and does not end with one. This includes `_name` and `__name` spellings; double-leading names are name-mangled in class scope. Ordinary, trailing-underscore, sunder, and dunder definitions are outside the rule.
+A non-public definition starts with an underscore and does not end with one. This includes `_name` and `__name` spellings; double-leading names are name-mangled in class scope. Ordinary, trailing-underscore, sunder, and dunder definitions are outside the rule. Nested functions and methods of a class defined inside a function are also outside the rule.
 
 ## Why
 

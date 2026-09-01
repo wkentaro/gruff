@@ -1152,6 +1152,11 @@ mod tests {
         let allowed = [
             "class Service:\n    def __eq__(self, other, /):\n        ...\n",
             "def outer():\n    def load(path):\n        ...\n",
+            "def outer():\n    class Service:\n        def load(self, path):\n            ...\n",
+            "def outer():\n    class Service:\n        def _load(self, path):\n            ...\n",
+            "def outer():\n    class Service:\n        def _load(self, *, path=None):\n            ...\n",
+            "def outer():\n    class Service:\n        def _load(self):\n            \"\"\"Load.\"\"\"\n",
+            "def outer():\n    class Outer:\n        class Inner:\n            def load(self, path):\n                ...\n",
             "load = lambda path: path\n",
         ];
         for source in allowed {
@@ -1197,7 +1202,8 @@ mod tests {
             "class Service:\n    def __load(self, path):\n        ...\n",
             "class Service:\n    @staticmethod\n    def _load(path):\n        ...\n",
             "class Service:\n    @classmethod\n    def _load(cls, path):\n        ...\n",
-            "def build():\n    class Service:\n        def _load(self, path):\n            ...\n",
+            "class Outer:\n    class Inner:\n        def _load(self, path):\n            ...\n",
+            "class Service:\n    def run(self):\n        ...\ndef _load(path):\n    ...\n",
         ];
         for source in implicit_conventions {
             assert_eq!(
