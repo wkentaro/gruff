@@ -44,6 +44,10 @@ _Avoid_: Obvious comment, redundant comment, narrative-comment heuristic
 A policy identifying an `except` clause inside a test definition whose body statements are each only a `pass`, an `...`, a bare `return`, or a skip call, after an optional docstring, so no exception it catches can fail the test; an `else` clause on the `try` exempts such a handler only when it makes no skip call. A test definition is a function or method whose name starts with `test` in a file named `test_*.py` or `*_test.py` and not lexically nested inside another function's body.
 _Avoid_: Empty except, silent failure, missing-assertion heuristic
 
+**Guarded tail**:
+A policy identifying an `if` statement with no `elif` or `else` that is the last statement directly in a function body or loop body and whose suite spans at least ten physical lines or lexically contains an `if` statement, so the rest of the body nests inside the condition instead of a `return` or `continue` guard.
+_Avoid_: Trailing conditional, guard-clause heuristic, early-return rule
+
 **Rule doc**:
 The canonical document for one rule, with four fixed sections: what it does, why, an example, and when to suppress. Every surface that explains a rule presents this document unchanged. The `explanation` key of `gruff rule --output-format json` is the one licensed exception; it follows Ruff's JSON shape but carries the whole rule doc, title included.
 _Avoid_: Rule page, rule explanation

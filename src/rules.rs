@@ -2,6 +2,7 @@ pub(crate) mod explicit_non_public_input_conventions;
 pub(crate) mod explicit_public_input_conventions;
 pub(crate) mod final_constants;
 pub(crate) mod no_exception_swallowing_tests;
+pub(crate) mod no_guarded_tails;
 pub(crate) mod no_non_public_docstrings;
 pub(crate) mod no_subsumed_comments;
 pub(crate) mod package_dunder_all;
