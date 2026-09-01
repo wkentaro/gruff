@@ -19,15 +19,17 @@ use ruff_python_ast::Stmt;
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::token::Tokens;
 use ruff_python_parser::parse_module;
+use ruff_source_file::LineIndex;
+use ruff_source_file::OneIndexed;
+use ruff_source_file::SourceCode;
 use ruff_text_size::Ranged;
 use ruff_text_size::TextRange;
+use ruff_text_size::TextSize;
 use serde::Deserialize;
 use serde::Serialize;
 use unicode_width::UnicodeWidthChar;
 
-use crate::analysis::find_line_starts;
 use crate::analysis::find_noqa_directive;
-use crate::analysis::get_line_index;
 use crate::analysis::matches_noqa_rules;
 
 mod analysis;
@@ -734,7 +736,8 @@ fn check_file(path: &Path, rules: &[&Rule]) -> Result<Vec<Finding>, RunError> {
 }
 
 fn check_source(path: &Path, source: &str, rules: &[&Rule]) -> Vec<Finding> {
-    let line_starts = find_line_starts(source);
+    let index = LineIndex::from_source_text(source);
+    let source_code = SourceCode::new(source, &index);
     let parsed = match parse_module(source) {
         Ok(parsed) => parsed,
         Err(error) => {
@@ -743,13 +746,12 @@ fn check_source(path: &Path, source: &str, rules: &[&Rule]) -> Vec<Finding> {
                 "invalid-syntax",
                 error.error.to_string(),
                 error.location,
-                source,
-                &line_starts,
+                &source_code,
                 None,
             )];
         }
     };
-    let comment_rows = collect_comment_rows(parsed.tokens(), &line_starts);
+    let comment_rows = collect_comment_rows(parsed.tokens(), &source_code);
     let mut findings = Vec::new();
 
     for rule in rules {
@@ -760,8 +762,8 @@ fn check_source(path: &Path, source: &str, rules: &[&Rule]) -> Vec<Finding> {
         };
         for diagnostic in diagnostics {
             let noqa_row = diagnostic.noqa_offset.map_or_else(
-                || find_noqa_row(source, &line_starts, parsed.tokens(), diagnostic.range),
-                |offset| locate_offset(source, &line_starts, offset.to_usize()).row,
+                || find_noqa_row(&source_code, parsed.tokens(), diagnostic.range),
+                |offset| locate_offset(&source_code, offset).row,
             );
             if has_noqa(source, &comment_rows, noqa_row, rule.code) {
                 continue;
@@ -771,8 +773,7 @@ fn check_source(path: &Path, source: &str, rules: &[&Rule]) -> Vec<Finding> {
                 rule.code,
                 diagnostic.message,
                 diagnostic.range,
-                source,
-                &line_starts,
+                &source_code,
                 Some(noqa_row),
             ));
         }
@@ -781,18 +782,11 @@ fn check_source(path: &Path, source: &str, rules: &[&Rule]) -> Vec<Finding> {
     findings
 }
 
-// Rows come from the `\n`-only line index, but the lexer ends a comment at a lone `\r` too, so one
-// row can carry several comments and every one of them has to be checked for the directive.
-fn collect_comment_rows(tokens: &Tokens, line_starts: &[usize]) -> Vec<(usize, TextRange)> {
+fn collect_comment_rows(tokens: &Tokens, source_code: &SourceCode) -> Vec<(usize, TextRange)> {
     tokens
         .iter()
         .filter(|token| token.kind() == TokenKind::Comment)
-        .map(|token| {
-            (
-                get_line_index(line_starts, token.start().to_usize()) + 1,
-                token.range(),
-            )
-        })
+        .map(|token| (source_code.line_index(token.start()).get(), token.range()))
         .collect()
 }
 
@@ -801,13 +795,12 @@ fn make_finding(
     code: impl Into<String>,
     message: impl Into<String>,
     range: TextRange,
-    source: &str,
-    line_starts: &[usize],
+    source_code: &SourceCode,
     noqa_row: Option<usize>,
 ) -> Finding {
-    let location = locate_offset(source, line_starts, range.start().to_usize());
-    let end_location = locate_offset(source, line_starts, range.end().to_usize());
-    let source_line = get_source_line(source, line_starts, location.row).to_string();
+    let location = locate_offset(source_code, range.start());
+    let end_location = locate_offset(source_code, range.end());
+    let source_line = get_source_line(source_code, location.row).to_owned();
     Finding {
         path: path.to_path_buf(),
         code: code.into(),
@@ -819,23 +812,22 @@ fn make_finding(
     }
 }
 
-fn locate_offset(source: &str, line_starts: &[usize], offset: usize) -> Location {
-    let offset = offset.min(source.len());
-    let line_index = get_line_index(line_starts, offset);
+fn locate_offset(source_code: &SourceCode, offset: TextSize) -> Location {
+    let position = source_code.line_column(offset.min(TextSize::of(source_code.text())));
     Location {
-        row: line_index + 1,
-        column: source[line_starts[line_index]..offset].chars().count() + 1,
+        row: position.line.get(),
+        column: position.column.get(),
     }
 }
 
-fn get_source_line<'a>(source: &'a str, line_starts: &[usize], row: usize) -> &'a str {
-    let start = line_starts[row - 1];
-    let Some(end) = line_starts.get(row) else {
-        return &source[start..];
-    };
-    // Mirrors `str::lines`, which drops the newline plus a carriage return that precedes it.
-    let line = &source[start..end - 1];
-    line.strip_suffix('\r').unwrap_or(line)
+fn get_source_line<'a>(source_code: &SourceCode<'a, '_>, row: usize) -> &'a str {
+    let line = OneIndexed::from_zero_indexed(row - 1);
+    let text = source_code.slice(TextRange::new(
+        source_code.line_start(line),
+        source_code.line_end_exclusive(line),
+    ));
+    // A byte-order mark is not part of the first line's text, and the columns already exclude it.
+    text.strip_prefix('\u{feff}').unwrap_or(text)
 }
 
 fn has_noqa(source: &str, comments: &[(usize, TextRange)], row: usize, code: &str) -> bool {
@@ -847,7 +839,7 @@ fn has_noqa(source: &str, comments: &[(usize, TextRange)], row: usize, code: &st
         .any(|(_, range)| is_noqa_directive(&source[*range], code))
 }
 
-fn find_noqa_row(source: &str, line_starts: &[usize], tokens: &Tokens, range: TextRange) -> usize {
+fn find_noqa_row(source_code: &SourceCode, tokens: &Tokens, range: TextRange) -> usize {
     // Tokens are emitted in source order, so their ends are non-decreasing and the scan can skip
     // ahead by binary search instead of walking the stream from the start for every diagnostic.
     let following = tokens.partition_point(|token| token.end() <= range.start());
@@ -855,8 +847,8 @@ fn find_noqa_row(source: &str, line_starts: &[usize], tokens: &Tokens, range: Te
         .iter()
         .find(|token| token.kind() == TokenKind::Newline)
         .map_or_else(
-            || locate_offset(source, line_starts, range.start().to_usize()).row,
-            |token| locate_offset(source, line_starts, token.start().to_usize()).row,
+            || locate_offset(source_code, range.start()).row,
+            |token| locate_offset(source_code, token.start()).row,
         )
 }
 
@@ -1352,9 +1344,52 @@ mod tests {
     }
 
     #[test]
-    fn suppresses_when_a_lone_carriage_return_stacks_comments_on_one_row() {
+    fn ends_rows_at_a_lone_carriage_return() {
+        let findings = check_rule("X = 1\rY = 2\r", "GR004");
+
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].location.row, 1);
+        assert_eq!(findings[1].location.row, 2);
+        assert_eq!(findings[1].source_line, "Y = 2");
+    }
+
+    #[test]
+    fn suppresses_only_the_carriage_return_row_the_directive_sits_on() {
         assert!(check_rule("X = 1  # noqa: GR004\r# junk\n", "GR004").is_empty());
-        assert!(check_rule("X = 1  # junk\r# noqa: GR004\n", "GR004").is_empty());
+        assert_eq!(
+            check_rule("X = 1  # junk\r# noqa: GR004\n", "GR004").len(),
+            1
+        );
+    }
+
+    #[test]
+    fn counts_guarded_tail_lines_across_lone_carriage_returns() {
+        let suite = (1..=10).fold(String::new(), |body, n| {
+            body + &format!("        x{n} = {n}\r")
+        });
+        let source = format!("def f(a):\r    if a:\r{suite}");
+
+        assert_eq!(check_rule(&source, "GR009").len(), 1);
+    }
+
+    #[test]
+    fn subsumes_comments_across_lone_carriage_returns() {
+        // Five filler rows lift the comment past the header exemption.
+        let source = "\r\r\r\r\r# Load the examples.\rconfig = _load_examples(config, ...)\r";
+
+        let findings = check_rule(source, "GR007");
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].location.row, 6);
+    }
+
+    #[test]
+    fn excludes_a_byte_order_mark_from_the_first_row() {
+        let findings = check_rule("\u{feff}X = 1\n", "GR004");
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].location.column, 1);
+        assert_eq!(findings[0].source_line, "X = 1");
     }
 
     #[test]
