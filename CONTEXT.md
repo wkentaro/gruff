@@ -48,6 +48,10 @@ _Avoid_: Empty except, silent failure, missing-assertion heuristic
 A policy identifying an `if` statement with no `elif` or `else` that is the last statement directly in a function body or loop body and whose suite spans at least ten physical lines or lexically contains an `if` statement, so the rest of the body nests inside the condition instead of a `return` or `continue` guard.
 _Avoid_: Trailing conditional, guard-clause heuristic, early-return rule
 
+**Positive branch conditions**:
+A policy identifying an `if` statement carrying a plain `else` and no `elif` whose test's outermost operation is a `not`, or a single-comparator `is not`, `!=`, or `not in` comparison, so the branches swap to state the condition positively.
+_Avoid_: Negated condition check, inverted if, condition polarity heuristic
+
 **Rule doc**:
 The canonical document for one rule, with four fixed sections: what it does, why, an example, and when to suppress. Every surface that explains a rule presents this document unchanged. The `explanation` key of `gruff rule --output-format json` is the one licensed exception; it follows Ruff's JSON shape but carries the whole rule doc, title included.
 _Avoid_: Rule page, rule explanation

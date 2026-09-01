@@ -51,3 +51,4 @@ nav:
       - rules/no-subsumed-comments.md
       - rules/no-exception-swallowing-tests.md
       - rules/no-guarded-tails.md
+      - rules/positive-branch-conditions.md

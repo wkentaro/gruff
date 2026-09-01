@@ -113,6 +113,13 @@ const RULES: &[Rule] = &[
         document: include_str!("../docs/rules/no-guarded-tails.md"),
         check: RuleCheck::SourceAst(rules::no_guarded_tails::check),
     },
+    Rule {
+        code: rules::positive_branch_conditions::CODE,
+        name: rules::positive_branch_conditions::NAME,
+        summary: rules::positive_branch_conditions::SUMMARY,
+        document: include_str!("../docs/rules/positive-branch-conditions.md"),
+        check: RuleCheck::Ast(rules::positive_branch_conditions::check),
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",
