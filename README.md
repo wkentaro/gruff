@@ -49,7 +49,7 @@ All rules are opt-in. Use an exact code such as `GR001` to adopt rules individua
 
 ## Rules at a glance
 
-The first release tests eight theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, non-public definitions are easier to understand when their names carry their purpose, comments are worth reading when they state more than the code beneath them, tests are worth running when an exception can still fail them, and a body is easier to follow when its trailing condition inverts into a guard.
+The first release tests nine theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, non-public definitions are easier to understand when their names carry their purpose, comments are worth reading when they state more than the code beneath them, tests are worth running when an exception can still fail them, a body is easier to follow when its trailing condition inverts into a guard, and a branch is easier to verify when its condition states the positive form.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
@@ -62,6 +62,7 @@ The first release tests eight theses: inputs are easier to trace when definition
 | GR007 | [`no-subsumed-comments`](https://wkentaro.github.io/gruff/rules/no-subsumed-comments/) | One-line comments state something beyond the statements they annotate. |
 | GR008 | [`no-exception-swallowing-tests`](https://wkentaro.github.io/gruff/rules/no-exception-swallowing-tests/) | Tests let exceptions propagate instead of swallowing them. |
 | GR009 | [`no-guarded-tails`](https://wkentaro.github.io/gruff/rules/no-guarded-tails/) | Trailing conditions invert into guards instead of nesting the rest of the body. |
+| GR010 | [`positive-branch-conditions`](https://wkentaro.github.io/gruff/rules/positive-branch-conditions/) | Branch conditions state the positive form instead of negating around an `else`. |
 
 Each rule links to its rule doc, which states what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
 

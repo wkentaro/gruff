@@ -1070,6 +1070,176 @@ fn allows_no_guarded_tails_conformance_cases() {
 }
 
 #[test]
+fn flags_positive_branch_conditions_conformance_cases() {
+    let directory = create_temp_directory("positive-branch-conditions-findings");
+    let mut sources = [
+        (
+            "not_equal.py",
+            "if a != b:\n    diverge(a, b)\nelse:\n    converge(a, b)\n",
+            (1, 1),
+        ),
+        (
+            "not_in.py",
+            "if a not in b:\n    add(a, b)\nelse:\n    skip(a, b)\n",
+            (1, 1),
+        ),
+        (
+            "is_not_none.py",
+            "if record is not None:\n    apply(record)\nelse:\n    log_missing()\n",
+            (1, 1),
+        ),
+        (
+            "unary_not.py",
+            "if not ready:\n    wait()\nelse:\n    start()\n",
+            (1, 1),
+        ),
+        // The outermost node is the `not`, so the inner comparison does not matter.
+        (
+            "unary_not_over_comparison.py",
+            "if not (a == b):\n    diverge(a, b)\nelse:\n    converge(a, b)\n",
+            (1, 1),
+        ),
+        (
+            "nested_in_function.py",
+            "def apply(job):\n    for step in job.steps:\n        if step not in DONE:\n            run(step)\n        else:\n            skip(step)\n",
+            (3, 9),
+        ),
+    ];
+    sources.sort_unstable_by_key(|(name, _, _)| *name);
+    for (name, source, _) in sources {
+        fs::write(directory.join(name), source).expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR010",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), sources.len());
+    for (finding, (name, _, (row, column))) in findings.as_array().unwrap().iter().zip(sources) {
+        assert!(finding["filename"].as_str().unwrap().ends_with(name));
+        assert_eq!(finding["code"], "GR010");
+        assert_eq!(finding["name"], "positive-branch-conditions");
+        assert_eq!(
+            finding["message"],
+            "Negated `if` condition with an `else`; test the positive form and swap the branches"
+        );
+        assert_eq!(finding["location"]["row"], row);
+        assert_eq!(finding["location"]["column"], column);
+        assert_eq!(finding["noqa_row"], row);
+    }
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn flags_each_nested_positive_branch_condition() {
+    let directory = create_temp_directory("positive-branch-conditions-nested");
+    fs::write(
+        directory.join("nested.py"),
+        "if not ready:\n    if value is not None:\n        apply(value)\n    else:\n        clear()\nelse:\n    start()\n",
+    )
+    .expect("conformance source should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR010",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), 2);
+    assert_eq!(findings[0]["location"]["row"], 1);
+    assert_eq!(findings[1]["location"]["row"], 2);
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn allows_positive_branch_conditions_conformance_cases() {
+    let directory = create_temp_directory("positive-branch-conditions-allowed");
+    let sources = [
+        (
+            "chained_comparison.py",
+            "if a is not b is not c:\n    diverge(a, b)\nelse:\n    converge(a, b)\n",
+        ),
+        (
+            "elif_without_else.py",
+            "if not ready:\n    wait()\nelif stalled:\n    reset()\n",
+        ),
+        (
+            "membership.py",
+            "if a in b:\n    skip(a, b)\nelse:\n    add(a, b)\n",
+        ),
+        (
+            "negation_under_and.py",
+            "if x and not y:\n    apply(x)\nelse:\n    skip(x)\n",
+        ),
+        (
+            "negation_under_or.py",
+            "if x or not y:\n    apply(x)\nelse:\n    skip(x)\n",
+        ),
+        ("no_else.py", "if not ready:\n    wait()\n"),
+        (
+            "positive_test.py",
+            "if record is None:\n    log_missing()\nelse:\n    apply(record)\n",
+        ),
+        (
+            "suppressed.py",
+            "if version != EXPECTED:  # noqa: GR010 -- Version.__ne__ compares ranges\n    reject(version)\nelse:\n    accept(version)\n",
+        ),
+        ("ternary.py", "z = a if not x else b\n"),
+        (
+            "with_elif.py",
+            "if not ready:\n    wait()\nelif stalled:\n    reset()\nelse:\n    start()\n",
+        ),
+    ];
+    for (name, source) in sources {
+        fs::write(directory.join(name), source).expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR010",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"[]\n");
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn splits_input_convention_rules_under_prefix_selection() {
     let directory = create_temp_directory("split-input-conventions");
     fs::write(
