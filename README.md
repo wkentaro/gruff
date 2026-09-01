@@ -49,7 +49,7 @@ All rules are opt-in. Use an exact code such as `GR001` to adopt rules individua
 
 ## Rules at a glance
 
-The first release tests five theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, and non-public definitions are easier to understand when their names carry their purpose.
+The first release tests six theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, non-public definitions are easier to understand when their names carry their purpose, and comments are worth reading when they state more than the code beneath them.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
@@ -59,6 +59,7 @@ The first release tests five theses: inputs are easier to trace when definitions
 | GR004 | [`final-constants`](https://wkentaro.github.io/gruff/rules/final-constants/) | Uppercase names and `Final` annotations appear together. |
 | GR005 | [`explicit-public-input-conventions`](https://wkentaro.github.io/gruff/rules/explicit-public-input-conventions/) | Every fixed input to a public callable has an explicit calling convention. |
 | GR006 | [`no-non-public-docstrings`](https://wkentaro.github.io/gruff/rules/no-non-public-docstrings/) | Non-public definitions carry their purpose in their names instead of docstrings. |
+| GR007 | [`no-subsumed-comments`](https://wkentaro.github.io/gruff/rules/no-subsumed-comments/) | One-line comments state something beyond the statements they annotate. |
 
 Each rule links to its rule doc, which states what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
 

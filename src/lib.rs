@@ -24,6 +24,9 @@ use ruff_text_size::TextRange;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::analysis::find_noqa_directive;
+use crate::analysis::matches_noqa_rules;
+
 mod analysis;
 mod rules;
 
@@ -35,7 +38,13 @@ struct Rule {
     #[serde(rename = "explanation")]
     document: &'static str,
     #[serde(skip)]
-    check: fn(&Path, &[Stmt]) -> Vec<rules::Diagnostic>,
+    check: RuleCheck,
+}
+
+#[derive(Clone, Copy)]
+enum RuleCheck {
+    Ast(fn(&Path, &[Stmt]) -> Vec<rules::Diagnostic>),
+    Tokens(fn(&str, &Tokens) -> Vec<rules::Diagnostic>),
 }
 
 const RULES: &[Rule] = &[
@@ -44,42 +53,49 @@ const RULES: &[Rule] = &[
         name: rules::explicit_non_public_input_conventions::NAME,
         summary: rules::explicit_non_public_input_conventions::SUMMARY,
         document: include_str!("../docs/rules/explicit-non-public-input-conventions.md"),
-        check: rules::explicit_non_public_input_conventions::check,
+        check: RuleCheck::Ast(rules::explicit_non_public_input_conventions::check),
     },
     Rule {
         code: rules::required_non_public_inputs::CODE,
         name: rules::required_non_public_inputs::NAME,
         summary: rules::required_non_public_inputs::SUMMARY,
         document: include_str!("../docs/rules/required-non-public-inputs.md"),
-        check: rules::required_non_public_inputs::check,
+        check: RuleCheck::Ast(rules::required_non_public_inputs::check),
     },
     Rule {
         code: rules::package_dunder_all::CODE,
         name: rules::package_dunder_all::NAME,
         summary: rules::package_dunder_all::SUMMARY,
         document: include_str!("../docs/rules/package-dunder-all.md"),
-        check: rules::package_dunder_all::check,
+        check: RuleCheck::Ast(rules::package_dunder_all::check),
     },
     Rule {
         code: rules::final_constants::CODE,
         name: rules::final_constants::NAME,
         summary: rules::final_constants::SUMMARY,
         document: include_str!("../docs/rules/final-constants.md"),
-        check: rules::final_constants::check,
+        check: RuleCheck::Ast(rules::final_constants::check),
     },
     Rule {
         code: rules::explicit_public_input_conventions::CODE,
         name: rules::explicit_public_input_conventions::NAME,
         summary: rules::explicit_public_input_conventions::SUMMARY,
         document: include_str!("../docs/rules/explicit-public-input-conventions.md"),
-        check: rules::explicit_public_input_conventions::check,
+        check: RuleCheck::Ast(rules::explicit_public_input_conventions::check),
     },
     Rule {
         code: rules::no_non_public_docstrings::CODE,
         name: rules::no_non_public_docstrings::NAME,
         summary: rules::no_non_public_docstrings::SUMMARY,
         document: include_str!("../docs/rules/no-non-public-docstrings.md"),
-        check: rules::no_non_public_docstrings::check,
+        check: RuleCheck::Ast(rules::no_non_public_docstrings::check),
+    },
+    Rule {
+        code: rules::no_subsumed_comments::CODE,
+        name: rules::no_subsumed_comments::NAME,
+        summary: rules::no_subsumed_comments::SUMMARY,
+        document: include_str!("../docs/rules/no-subsumed-comments.md"),
+        check: RuleCheck::Tokens(rules::no_subsumed_comments::check),
     },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
@@ -371,15 +387,15 @@ fn run_check(arguments: CheckArguments) -> Result<u8, RunError> {
             explicit_config.as_ref(),
             &mut config_cache,
         )?;
-        let mut file_findings = check_file(&path)?;
+        let mut enabled_rules = Vec::new();
         for rule in RULES {
             let is_enabled = resolve_rule_enabled(&arguments, &config.raw, rule.code)?;
             is_rule_enabled_anywhere |= is_enabled;
-            if !is_enabled || is_ignored_for_file(&path, &config, rule.code)? {
-                file_findings.retain(|finding| finding.code != rule.code);
+            if is_enabled && !is_ignored_for_file(&path, &config, rule.code)? {
+                enabled_rules.push(rule);
             }
         }
-        findings.extend(file_findings);
+        findings.extend(check_file(&path, &enabled_rules)?);
     }
 
     if !has_files {
@@ -684,13 +700,13 @@ fn is_ignored_for_file(path: &Path, config: &LoadedConfig, code: &str) -> Result
     Ok(false)
 }
 
-fn check_file(path: &Path) -> Result<Vec<Finding>, RunError> {
+fn check_file(path: &Path, rules: &[&Rule]) -> Result<Vec<Finding>, RunError> {
     let source = fs::read_to_string(path)
         .map_err(|error| RunError(format!("Failed to read {}: {error}", path.display())))?;
-    Ok(check_source(path, &source))
+    Ok(check_source(path, &source, rules))
 }
 
-fn check_source(path: &Path, source: &str) -> Vec<Finding> {
+fn check_source(path: &Path, source: &str, rules: &[&Rule]) -> Vec<Finding> {
     let parsed = match parse_module(source) {
         Ok(parsed) => parsed,
         Err(error) => {
@@ -706,8 +722,12 @@ fn check_source(path: &Path, source: &str) -> Vec<Finding> {
     };
     let mut findings = Vec::new();
 
-    for rule in RULES {
-        for diagnostic in (rule.check)(path, parsed.suite()) {
+    for rule in rules {
+        let diagnostics = match rule.check {
+            RuleCheck::Ast(check) => check(path, parsed.suite()),
+            RuleCheck::Tokens(check) => check(source, parsed.tokens()),
+        };
+        for diagnostic in diagnostics {
             let noqa_row = diagnostic.noqa_offset.map_or_else(
                 || find_noqa_row(source, parsed.tokens(), diagnostic.range),
                 |offset| locate_offset(source, offset.to_usize()).row,
@@ -783,27 +803,7 @@ fn find_noqa_row(source: &str, tokens: &Tokens, range: TextRange) -> usize {
 }
 
 fn is_noqa_directive(comment: &str, code: &str) -> bool {
-    let lowercase = comment.to_ascii_lowercase();
-    let Some(directive) = lowercase
-        .strip_prefix('#')
-        .and_then(|directive| directive.trim_start().strip_prefix("noqa"))
-    else {
-        return false;
-    };
-    if directive
-        .chars()
-        .next()
-        .is_some_and(|character| character != ':' && !character.is_ascii_whitespace())
-    {
-        return false;
-    }
-    let directive = directive.trim_start();
-    let Some(rules) = directive.strip_prefix(':') else {
-        return true;
-    };
-    rules
-        .split(|character: char| character == ',' || character.is_ascii_whitespace())
-        .any(|rule| rule.eq_ignore_ascii_case(code))
+    find_noqa_directive(comment).is_some_and(|(_, rules)| matches_noqa_rules(rules, code))
 }
 
 fn print_findings(findings: &[Finding], output_format: OutputFormat) -> Result<bool, RunError> {
@@ -951,8 +951,12 @@ fn make_absolute_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    fn check_all_rules(path: &Path, source: &str) -> Vec<Finding> {
+        check_source(path, source, &RULES.iter().collect::<Vec<_>>())
+    }
+
     fn check_rule(source: &str, code: &str) -> Vec<Finding> {
-        check_source(Path::new("test.py"), source)
+        check_all_rules(Path::new("test.py"), source)
             .into_iter()
             .filter(|finding| finding.code == code)
             .collect()
@@ -960,7 +964,7 @@ mod tests {
 
     #[test]
     fn reports_each_non_public_input() {
-        let findings = check_source(
+        let findings = check_all_rules(
             Path::new("test.py"),
             "def _resize(data, width=512, *, mode=\"fit\"):\n    ...\n",
         );
@@ -988,7 +992,7 @@ mod tests {
 
     #[test]
     fn reports_both_rules_for_a_defaulted_positional_input() {
-        let findings = check_source(Path::new("test.py"), "def _f(width=512):\n    ...\n");
+        let findings = check_all_rules(Path::new("test.py"), "def _f(width=512):\n    ...\n");
 
         assert_eq!(findings.len(), 2);
         assert_eq!(findings[0].code, "GR001");
@@ -1133,7 +1137,7 @@ mod tests {
         ];
         for source in allowed {
             assert!(
-                check_source(Path::new("test.py"), source).is_empty(),
+                check_all_rules(Path::new("test.py"), source).is_empty(),
                 "unexpected finding for {source}"
             );
         }
@@ -1214,7 +1218,7 @@ mod tests {
         ];
         for source in allowed {
             assert!(
-                check_source(Path::new("test.py"), source).is_empty(),
+                check_all_rules(Path::new("test.py"), source).is_empty(),
                 "unexpected finding for {source}"
             );
         }
@@ -1222,7 +1226,7 @@ mod tests {
 
     #[test]
     fn keeps_required_non_public_inputs_independent_for_positional_only_inputs() {
-        let findings = check_source(Path::new("test.py"), "def _load(path=None, /):\n    ...\n");
+        let findings = check_all_rules(Path::new("test.py"), "def _load(path=None, /):\n    ...\n");
 
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].code, "GR002");
@@ -1230,7 +1234,7 @@ mod tests {
 
     #[test]
     fn suppresses_each_rule_independently() {
-        let findings = check_source(
+        let findings = check_all_rules(
             Path::new("test.py"),
             "def _load(\\\n    path=None):  # noqa: GR001 -- positional protocol\n    ...\n",
         );
