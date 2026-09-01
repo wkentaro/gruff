@@ -49,3 +49,4 @@ nav:
       - rules/explicit-public-input-conventions.md
       - rules/no-non-public-docstrings.md
       - rules/no-subsumed-comments.md
+      - rules/no-exception-swallowing-tests.md
