@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.0.7 - 2026-09-02
+
+### Fixed
+
+- GR004 suppressions on multi-line assignments now belong beside the assigned name, matching the finding location and Ruff. ([#77](https://github.com/wkentaro/gruff/pull/77))
+
+
 ## 0.0.6 - 2026-09-02
 
 ### Added
