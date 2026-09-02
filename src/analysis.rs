@@ -243,18 +243,18 @@ pub(crate) fn find_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bo
 pub(crate) fn find_non_public_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
     find_definitions(statements)
         .into_iter()
-        .filter(|(definition, _)| is_non_public_definition(&definition.name))
+        .filter(|(definition, _)| is_non_public_name(&definition.name))
         .collect()
 }
 
 pub(crate) fn find_public_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
     find_definitions(statements)
         .into_iter()
-        .filter(|(definition, _)| !is_non_public_definition(&definition.name))
+        .filter(|(definition, _)| !is_non_public_name(&definition.name))
         .collect()
 }
 
-fn is_non_public_definition(name: &str) -> bool {
+pub(crate) fn is_non_public_name(name: &str) -> bool {
     name.starts_with('_') && !name.ends_with('_')
 }
 
