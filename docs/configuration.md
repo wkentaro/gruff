@@ -7,7 +7,7 @@ Gruff reads configuration only from `pyproject.toml`:
 output-format = "full"
 
 [tool.gruff.lint]
-select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006", "GR007", "GR008", "GR009", "GR010"]
+select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006", "GR007", "GR008", "GR009", "GR010", "GR011"]
 ignore = []
 per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
@@ -141,4 +141,25 @@ GR003 only requires the manifest to exist. Once it does, `F401` flags re-exports
  class ThumbnailWriter:
 -    formats = ["png", "jpg"]
 +    formats: ClassVar[list[str]] = ["png", "jpg"]
+```
+
+### Module bindings (GR011)
+
+`PLR2004` names a magic value; when the name is non-public and one definition reads it, GR011 places it where that reader can see it:
+
+```diff
+-_MAX_WIDTH: Final = 4096
+-
+ def validate_width(width: int, /) -> None:
+-    if width > _MAX_WIDTH:
++    MAX_WIDTH: Final = 4096
++    if width > MAX_WIDTH:
+         raise ValueError(width)
+```
+
+GR011 reads one module at a time, so it cannot see another module importing a non-public name. `PLC2701` flags that import on the importing side; enable it alongside GR011 to catch a test-only export from both ends:
+
+```toml
+[tool.ruff.lint]
+extend-select = ["PLC2701"]
 ```

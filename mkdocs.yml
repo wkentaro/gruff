@@ -52,3 +52,4 @@ nav:
       - rules/no-exception-swallowing-tests.md
       - rules/no-guarded-tails.md
       - rules/positive-branch-conditions.md
+      - rules/no-single-consumer-module-bindings.md

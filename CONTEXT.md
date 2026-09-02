@@ -52,6 +52,10 @@ _Avoid_: Trailing conditional, guard-clause heuristic, early-return rule
 A policy identifying an `if` statement carrying a plain `else` and no `elif` whose test's outermost operation is a `not`, or a single-comparator `is not`, `!=`, or `not in` comparison, so the branches swap to state the condition positively.
 _Avoid_: Negated condition check, inverted if, condition polarity heuristic
 
+**Single-consumer binding**:
+A non-public module binding — a direct child of the module body assigning a plain single-underscore-prefixed, non-trailing-underscore name to a value that is neither a call expression nor an empty list or dict display — that is bound nowhere else in the module, is read at least once, and whose every read sits inside the body of exactly one consumer, a `def` that is a direct child of the module body or of a module-level class body, with reads from nested functions, lambdas, and comprehensions counting as the consumer's. A read in a module-level statement, a class body, or a consumer's decorators, defaults, or annotations, a subscript or attribute store or delete whose chain leads back to the name, a name listed in `__all__`, or a module that reads `globals`, `vars`, `eval`, or `exec` by name keeps the binding at module scope.
+_Avoid_: Hoisted constant, module-level constant used once, private constant scoping
+
 **Rule doc**:
 The canonical document for one rule, with four fixed sections: what it does, why, an example, and when to suppress. Every surface that explains a rule presents this document unchanged. The `explanation` key of `gruff rule --output-format json` is the one licensed exception; it follows Ruff's JSON shape but carries the whole rule doc, title included.
 _Avoid_: Rule page, rule explanation
