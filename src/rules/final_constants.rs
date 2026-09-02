@@ -70,7 +70,7 @@ impl FinalConstantVisitor {
             self.diagnostics.push(Diagnostic {
                 message: format!("Constant {} must be annotated Final", name.id),
                 range: name.range,
-                noqa_offset: None,
+                noqa_offset: Some(name.range.start()),
             });
         } else if is_final && !is_uppercase {
             self.diagnostics.push(Diagnostic {
@@ -79,7 +79,7 @@ impl FinalConstantVisitor {
                     name.id
                 ),
                 range: name.range,
-                noqa_offset: None,
+                noqa_offset: Some(name.range.start()),
             });
         }
     }

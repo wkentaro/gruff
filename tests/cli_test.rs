@@ -1921,6 +1921,12 @@ _PRIVATE = 6
 DECLARATION: int
 qualified: typing.Final[int] = 7
 OTHER_CODE = 1  # noqa: GR001 -- GR004 is fine
+MULTILINE = (
+    1,
+)  # noqa: GR004 -- external spelling
+multiline: Final = (
+    2,
+)  # noqa: GR004 -- framework state
 "#,
     )
     .expect("finding source should be written");
@@ -1959,6 +1965,12 @@ OTHER_CODE = 1  # noqa: GR001 -- GR004 is fine
             "Final binding qualified must be named in UPPER_SNAKE_CASE",
         ),
         (13, 1, "Constant OTHER_CODE must be annotated Final"),
+        (14, 1, "Constant MULTILINE must be annotated Final"),
+        (
+            17,
+            1,
+            "Final binding multiline must be named in UPPER_SNAKE_CASE",
+        ),
     ];
     assert_eq!(findings.as_array().unwrap().len(), expected.len());
     for (finding, (row, column, message)) in findings.as_array().unwrap().iter().zip(expected) {
@@ -1966,6 +1978,7 @@ OTHER_CODE = 1  # noqa: GR001 -- GR004 is fine
         assert_eq!(finding["name"], "final-constants");
         assert_eq!(finding["location"]["row"], row);
         assert_eq!(finding["location"]["column"], column);
+        assert_eq!(finding["noqa_row"], row);
         assert_eq!(finding["message"], message);
         assert_eq!(finding["severity"], "error");
     }
@@ -2050,6 +2063,14 @@ DOUBLED_HASH = 1  ## noqa: GR004 -- external spelling
 TRAILING_DIRECTIVE = 1  # external spelling  # noqa: GR004
 BARE_DIRECTIVE = 1  # noqa# external spelling
 HASHED_CODE_LIST = 1  # noqa: GR004#external spelling
+SUPPRESSED_MULTILINE = (  # noqa: GR004 -- external spelling
+    1,
+)
+_suppressed_multiline: Final = (  # noqa: GR004, GR011 -- framework state
+    "debug",
+)
+def read_suppressed_multiline():
+    return _suppressed_multiline
 "#,
     )
     .expect("allowed source should be written");
@@ -2064,7 +2085,7 @@ HASHED_CODE_LIST = 1  # noqa: GR004#external spelling
             "check",
             "--isolated",
             "--select",
-            "GR004",
+            "GR004,GR011",
             "--output-format",
             "concise",
             ".",

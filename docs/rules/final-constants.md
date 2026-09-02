@@ -27,8 +27,10 @@ Two spellings compete for the same idea when uppercase names and `Final` annotat
 
 Fix the finding by default, in whichever direction the binding calls for: add `Final` to a constant, or lowercase a name that is not one.
 
-Suppress when the spelling follows an external convention the code does not control, such as a name a protocol or framework reads by exact case:
+Suppress when the spelling follows an external convention the code does not control, such as a name a protocol or framework reads by exact case. Place the directive beside the assigned name, including when the value spans multiple lines:
 
 ```python
-EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling
+EXTERNAL_NAMES = (  # noqa: GR004 -- public protocol spelling
+    "one",
+)
 ```
