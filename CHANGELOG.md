@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.0.6 - 2026-09-02
+
+### Added
+
+- Added GR011 `no-single-consumer-module-bindings`, which flags a non-public, call-free module binding read by exactly one module-level function or method and asks for it to move into that definition. ([#75](https://github.com/wkentaro/gruff/pull/75))
+
+### Fixed
+
+- Aligned full-output caret lines for findings on rows 10+ and for source lines containing tabs or wide characters; tabs in the displayed source line now render as four spaces. ([#72](https://github.com/wkentaro/gruff/pull/72))
+- Report rows and columns the way Ruff does: a lone carriage return now starts a new row — so `# noqa` scoping, the comment-subsumption window, and the guarded-tail line gate see each physical line on such files — and a byte-order mark counts toward neither the first row's columns nor its printed source line. ([#73](https://github.com/wkentaro/gruff/pull/73))
+
+
 ## 0.0.5 - 2026-09-01
 
 ### Added
