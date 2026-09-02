@@ -33,7 +33,16 @@ docs:  # Build the documentation site
 	$(call exec,$(MKDOCS) build --strict)
 
 release:  # Prepare a release: make release VERSION=X.Y.Z
-	@test -n "$(VERSION)" || { echo "usage: make release VERSION=X.Y.Z" >&2; exit 1; }
+	@test -n "$(VERSION)" || { \
+		echo "usage: make release VERSION=X.Y.Z" >&2; \
+		echo "recent releases:" >&2; \
+		git tag --sort=-v:refname | head -5 | sed "s/^/  /" >&2; \
+		exit 1; \
+	}
 	$(call exec,perl -pi -e 's/^version = ".*"/version = "$(VERSION)"/' Cargo.toml pyproject.toml)
 	$(call exec,cargo check --quiet)
 	$(call exec,$(TOWNCRIER) build --yes --version $(VERSION))
+	@printf "\n\033[1;32mNext steps\033[0m\n"
+	@echo "  git commit -am \"chore: prep $(VERSION) release\""
+	@echo "  git tag v$(VERSION)"
+	@echo "  git push origin main v$(VERSION)"
