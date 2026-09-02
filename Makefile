@@ -1,7 +1,8 @@
 RUFF := uvx --from ruff==0.16.4 ruff
 MKDOCS := uvx --from mkdocs==1.6.1 --with mkdocs-material==9.7.7 mkdocs
+TOWNCRIER := uvx --from towncrier==25.8.0 towncrier
 
-.PHONY: help format lint test docs
+.PHONY: help format lint test docs release
 .DEFAULT_GOAL := help
 
 define exec
@@ -30,3 +31,9 @@ test:  # Test code
 
 docs:  # Build the documentation site
 	$(call exec,$(MKDOCS) build --strict)
+
+release:  # Prepare a release: make release VERSION=X.Y.Z
+	@test -n "$(VERSION)" || { echo "usage: make release VERSION=X.Y.Z" >&2; exit 1; }
+	$(call exec,perl -pi -e 's/^version = ".*"/version = "$(VERSION)"/' Cargo.toml pyproject.toml)
+	$(call exec,cargo check --quiet)
+	$(call exec,$(TOWNCRIER) build --yes --version $(VERSION))

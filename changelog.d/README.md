@@ -16,9 +16,9 @@ patch for backward-compatible fixes; there is no minimum release size.
 
 To release version `X.Y.Z`:
 
-1. Set the version to `X.Y.Z` in `Cargo.toml` and `pyproject.toml`, then run
-   `cargo check` so `Cargo.lock` matches; the release build is `--locked`.
-1. Run `uvx --from towncrier==25.8.0 towncrier build --yes --version X.Y.Z`.
+1. Run `make release VERSION=X.Y.Z`; it sets the version in `Cargo.toml` and
+   `pyproject.toml`, syncs `Cargo.lock` (the release build is `--locked`), and
+   builds `CHANGELOG.md` from the fragments.
 1. Commit the updated changelog and deleted fragments, then tag that commit.
 
 Pushing the tag publishes to PyPI and creates the GitHub release from the
