@@ -1240,6 +1240,252 @@ fn allows_positive_branch_conditions_conformance_cases() {
 }
 
 #[test]
+fn flags_no_single_consumer_module_bindings_conformance_cases() {
+    let directory = create_temp_directory("no-single-consumer-module-bindings-findings");
+    let mut sources = [
+        (
+            "annotated.py",
+            "from typing import Final\n\n_LIMIT: Final = 4096\n\n\ndef validate(width, /):\n    return width <= _LIMIT\n",
+            ("_LIMIT", "validate", 3, 1),
+        ),
+        (
+            "async_lambda.py",
+            "_SCALE = 2\n\n\nasync def scale(values, /):\n    return map(lambda value: value * _SCALE, values)\n",
+            ("_SCALE", "scale", 1, 1),
+        ),
+        // Qt's `.exec()` is attribute access, not the builtin that hides the namespace.
+        (
+            "attribute_exec.py",
+            "_TITLE = \"Settings\"\n\n\nclass Window:\n    @classmethod\n    def open(cls):\n        dialog = cls.build(_TITLE)\n        dialog.exec()\n",
+            ("_TITLE", "Window.open", 1, 1),
+        ),
+        // `_A` is read at module level by `_B`'s value, so only `_B` is flagged on this run.
+        (
+            "cascade.py",
+            "_A = 1\n_B = _A + 1\n\n\ndef read():\n    return _B\n",
+            ("_B", "read", 2, 1),
+        ),
+        (
+            "comprehension.py",
+            "_MAX = 255\n\n\ndef is_rgb(value, /):\n    return all(0 <= channel <= _MAX for channel in value)\n",
+            ("_MAX", "is_rgb", 1, 1),
+        ),
+        (
+            "lowercase.py",
+            "_suffix = \".png\"\n\n\ndef icon_path(name, /):\n    return name + _suffix\n",
+            ("_suffix", "icon_path", 1, 1),
+        ),
+        (
+            "method.py",
+            "_FORMATS = {\"RGB\": 1, \"RGBA\": 2}\n\n\nclass Dialog:\n    def apply(self):\n        return _FORMATS[self.mode]\n",
+            ("_FORMATS", "Dialog.apply", 1, 1),
+        ),
+        // Two reads from the same consumer are still one consumer.
+        // A lookup reads the container; only a store into it would keep the binding.
+        (
+            "lookup.py",
+            "_SCHEMES = {\"light\": 1, \"dark\": 2}\n\n\ndef scheme(theme, /):\n    return _SCHEMES.get(theme, 0)\n",
+            ("_SCHEMES", "scheme", 1, 1),
+        ),
+        (
+            "multiple_reads.py",
+            "_LABEL = \"Zoom\"\n\n\ndef build(widget, /):\n    widget.setToolTip(_LABEL)\n    widget.setStatusTip(_LABEL)\n",
+            ("_LABEL", "build", 1, 1),
+        ),
+        (
+            "nested_function.py",
+            "_SEED = 9\n\n\ndef outer():\n    def inner():\n        return _SEED\n\n    return inner\n",
+            ("_SEED", "outer", 1, 1),
+        ),
+        // The read sits in a static method, so the consumer is spelled with its class.
+        (
+            "static_method.py",
+            "_ORIGIN = (0, 0)\n\n\nclass Canvas:\n    @staticmethod\n    def origin():\n        return _ORIGIN\n",
+            ("_ORIGIN", "Canvas.origin", 1, 1),
+        ),
+    ];
+    sources.sort_unstable_by_key(|(name, _, _)| *name);
+    for (name, source, _) in sources {
+        fs::write(directory.join(name), source).expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR011",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(findings.as_array().unwrap().len(), sources.len());
+    for (finding, (name, _, (binding, consumer, row, column))) in
+        findings.as_array().unwrap().iter().zip(sources)
+    {
+        assert!(finding["filename"].as_str().unwrap().ends_with(name));
+        assert_eq!(finding["code"], "GR011");
+        assert_eq!(finding["name"], "no-single-consumer-module-bindings");
+        assert_eq!(
+            finding["message"],
+            format!(
+                "Non-public module binding `{binding}` is used only by `{consumer}`; move it into that definition"
+            )
+        );
+        assert_eq!(finding["location"]["row"], row);
+        assert_eq!(finding["location"]["column"], column);
+        assert_eq!(finding["noqa_row"], row);
+    }
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn allows_no_single_consumer_module_bindings_conformance_cases() {
+    let directory = create_temp_directory("no-single-consumer-module-bindings-allowed");
+    let sources = [
+        (
+            "annotation_read.py",
+            "_Mode = int\n\n\ndef parse(value: _Mode, /):\n    return value\n",
+        ),
+        (
+            "called_value.py",
+            "_CONFIG = load_config()\n\n\ndef default(key, /):\n    return _CONFIG[key]\n",
+        ),
+        (
+            "class_body_read.py",
+            "_HEIGHT = 6\n\n\nclass Widget:\n    height = _HEIGHT\n\n    def build(self):\n        return _HEIGHT\n",
+        ),
+        (
+            "conditional_definition.py",
+            "_FALLBACK = 1\n\nif PY_OLD:\n    def load():\n        return _FALLBACK\n",
+        ),
+        (
+            "decorator_read.py",
+            "_CASES = (1, 2)\n\n\n@parametrize(_CASES)\ndef test_case(case, /):\n    return case in _CASES\n",
+        ),
+        (
+            "default_read.py",
+            "_TEXT = \"label\"\n\n\ndef render(text=_TEXT, /):\n    return text + _TEXT\n",
+        ),
+        (
+            "attribute_store.py",
+            "_STATE = Namespace\n\n\ndef mark():\n    _STATE.ready = True\n",
+        ),
+        // The stored-into target is nested; the base of the chain is what changes.
+        (
+            "chained_store.py",
+            "_CACHE = {\"a\": {}}\n_STATE = Namespace\n_ROWS = [Row]\n_TABLE = Namespace\n\n\ndef mark(key, /):\n    _CACHE[\"a\"][key] = 1\n    _STATE.inner.ready = True\n    _ROWS[0].ready = True\n    del _TABLE.rows[key]\n",
+        ),
+        (
+            "dunder_all.py",
+            "_LEVELS = (\"debug\", \"info\")\n__all__ = [\"_LEVELS\"]\n\n\ndef main():\n    return _LEVELS\n",
+        ),
+        (
+            "dunder_all_extended.py",
+            "_LEVELS = (\"debug\", \"info\")\n__all__ = ()\n__all__ += (\"_LEVELS\",)\n\n\ndef main():\n    return _LEVELS\n",
+        ),
+        (
+            "empty_accumulator.py",
+            "_SEEN = []\n\n\ndef add(item, /):\n    _SEEN.append(item)\n    return len(_SEEN)\n",
+        ),
+        (
+            "mangled.py",
+            "__SIZE = 5\n\n\nclass Canvas:\n    def size(self):\n        return __SIZE\n",
+        ),
+        (
+            "dynamic_namespace.py",
+            "_LIMIT = 1\n\n\ndef read(name, /):\n    return _LIMIT + globals()[name]\n",
+        ),
+        (
+            "global_rebind.py",
+            "_SESSION = None\n\n\ndef session():\n    global _SESSION\n    _SESSION = 1\n    return _SESSION\n",
+        ),
+        (
+            "module_read.py",
+            "_OFFSET = 0.22\n_WIDTH = _OFFSET * 2\n\n\ndef arrow():\n    return _OFFSET\n",
+        ),
+        (
+            "nested_class_method.py",
+            "_SIZE = 3\n\n\nclass Outer:\n    class Inner:\n        def size(self):\n            return _SIZE\n",
+        ),
+        (
+            "public_name.py",
+            "LIMIT = 4096\n\n\ndef validate(width, /):\n    return width <= LIMIT\n",
+        ),
+        (
+            "rebound.py",
+            "_COUNT = 1\n_COUNT = 2\n\n\ndef count():\n    return _COUNT\n",
+        ),
+        // Every other binding form counts as a second binding site.
+        (
+            "rebound_elsewhere.py",
+            "_A = 1\n_B = 2\n_C = 3\n_D = 4\n_E = 5\n_F = 6\n_G = 7\n\n\ndef read(_A, /):\n    import os as _B\n    for _C in ():\n        pass\n    with open(\"f\") as _D:\n        pass\n    try:\n        pass\n    except OSError as _E:\n        pass\n    match _F:\n        case _F:\n            pass\n    if (_G := 1):\n        pass\n    return _A, _B, _C, _D, _E, _F, _G\n",
+        ),
+        (
+            "shadowed.py",
+            "_VALUE = 8\n\n\ndef read():\n    return _VALUE\n\n\ndef write():\n    _VALUE = 1\n    return _VALUE\n",
+        ),
+        // The only read is inside a string, which is a constant, so the binding has no consumer.
+        (
+            "string_annotation.py",
+            "_Alias = int\n\n\ndef parse(value, /):\n    parsed: \"_Alias\" = value\n    return parsed\n",
+        ),
+        (
+            "subscript_store.py",
+            "_CACHE = {\"seed\": 0}\n\n\ndef get(key, /):\n    if key not in _CACHE:\n        _CACHE[key] = len(_CACHE)\n    return _CACHE[key]\n",
+        ),
+        (
+            "suppressed.py",
+            "_LEVELS = (\"debug\", \"info\")  # noqa: GR011 -- the test module parametrizes over it\n\n\ndef main():\n    return _LEVELS\n",
+        ),
+        (
+            "suppressed_multiline.py",
+            "_LEVELS = (  # noqa: GR011 -- the test module parametrizes over it\n    \"debug\",\n    \"info\",\n)\n\n\ndef main():\n    return _LEVELS\n",
+        ),
+        (
+            "two_consumers.py",
+            "_TWO = 2\n\n\ndef first():\n    return _TWO\n\n\ndef second():\n    return _TWO\n",
+        ),
+        (
+            "unpacked.py",
+            "_A, _B = 1, 2\n\n\ndef read():\n    return _A + _B\n",
+        ),
+        ("unused.py", "_DEAD = 1\n\n\ndef read():\n    return 2\n"),
+    ];
+    for (name, source) in sources {
+        fs::write(directory.join(name), source).expect("conformance source should be written");
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR011",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"[]\n");
+    assert!(output.stderr.is_empty());
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn splits_input_convention_rules_under_prefix_selection() {
     let directory = create_temp_directory("split-input-conventions");
     fs::write(

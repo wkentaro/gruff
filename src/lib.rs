@@ -125,6 +125,13 @@ const RULES: &[Rule] = &[
         document: include_str!("../docs/rules/positive-branch-conditions.md"),
         check: RuleCheck::Ast(rules::positive_branch_conditions::check),
     },
+    Rule {
+        code: rules::no_single_consumer_module_bindings::CODE,
+        name: rules::no_single_consumer_module_bindings::NAME,
+        summary: rules::no_single_consumer_module_bindings::SUMMARY,
+        document: include_str!("../docs/rules/no-single-consumer-module-bindings.md"),
+        check: RuleCheck::Ast(rules::no_single_consumer_module_bindings::check),
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",
