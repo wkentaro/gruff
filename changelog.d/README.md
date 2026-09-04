@@ -5,7 +5,8 @@ Each user-facing change ships as one file here instead of editing
 
 Name the file `<PR number>.<type>.md`, where `<type>` is one of `added`,
 `changed`, `deprecated`, `removed`, `fixed`, or `security`. A second fragment
-for the same PR and type takes a counter suffix: `123.fixed.2.md`.
+for the same PR and type takes a counter suffix: `1234.fixed.2.md`. Add the
+fragment after opening the PR, when its number is known.
 
 Write the entry as a single line without a bullet or PR link; towncrier adds
 the link from the filename. Prefix `**Breaking:**` for changes that bump the
