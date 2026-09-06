@@ -132,6 +132,13 @@ const RULES: &[Rule] = &[
         document: include_str!("../docs/rules/no-single-consumer-module-bindings.md"),
         check: RuleCheck::Ast(rules::no_single_consumer_module_bindings::check),
     },
+    Rule {
+        code: rules::public_data_properties::CODE,
+        name: rules::public_data_properties::NAME,
+        summary: rules::public_data_properties::SUMMARY,
+        document: include_str!("../docs/rules/public-data-properties.md"),
+        check: RuleCheck::Ast(rules::public_data_properties::check),
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",

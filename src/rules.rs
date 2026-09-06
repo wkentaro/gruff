@@ -8,6 +8,7 @@ pub(crate) mod no_single_consumer_module_bindings;
 pub(crate) mod no_subsumed_comments;
 pub(crate) mod package_dunder_all;
 pub(crate) mod positive_branch_conditions;
+pub(crate) mod public_data_properties;
 pub(crate) mod required_non_public_inputs;
 
 use ruff_text_size::TextRange;
