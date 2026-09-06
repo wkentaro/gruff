@@ -9,12 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.0.8 - 2026-09-06
+
+### Added
+
+- Add opt-in `GR012` (`public-data-properties`) for public instance stores without an explicit property setter, paired with Ruff `SLF001` for external backing-field access. ([#84](https://github.com/wkentaro/gruff/pull/84))
+
 ## 0.0.7 - 2026-09-02
 
 ### Fixed
 
 - GR004 suppressions on multi-line assignments now belong beside the assigned name, matching the finding location and Ruff. ([#77](https://github.com/wkentaro/gruff/pull/77))
-
 
 ## 0.0.6 - 2026-09-02
 
@@ -26,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Aligned full-output caret lines for findings on rows 10+ and for source lines containing tabs or wide characters; tabs in the displayed source line now render as four spaces. ([#72](https://github.com/wkentaro/gruff/pull/72))
 - Report rows and columns the way Ruff does: a lone carriage return now starts a new row — so `# noqa` scoping, the comment-subsumption window, and the guarded-tail line gate see each physical line on such files — and a byte-order mark counts toward neither the first row's columns nor its printed source line. ([#73](https://github.com/wkentaro/gruff/pull/73))
-
 
 ## 0.0.5 - 2026-09-01
 
@@ -48,7 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GR001, GR002, GR005, and GR006 no longer flag methods of a class defined inside a function; like nested functions, those methods sit outside the definition concept. ([#67](https://github.com/wkentaro/gruff/pull/67))
 - Fixed the superquadratic `# noqa` lookup that made comment-dense files take tens of seconds to check; suppression and offset lookups now resolve through a shared per-file line index. ([#71](https://github.com/wkentaro/gruff/pull/71))
 
-
 ## 0.0.4 - 2026-08-29
 
 ### Added
@@ -58,7 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Split explicit input conventions into independently selectable non-public GR001 and public GR005 rules, and aligned GR002 with the non-public definition boundary. ([#42](https://github.com/wkentaro/gruff/pull/42))
-
 
 ## 0.0.3 - 2026-08-28
 
@@ -70,13 +72,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed GR001's rule name and diagnostic to describe explicit private input calling conventions. ([#37](https://github.com/wkentaro/gruff/pull/37))
 
-
 ## 0.0.2 - 2026-08-28
 
 ### Changed
 
 - Changed GR001 to accept fixed positional-only private inputs as an explicit calling convention. ([#32](https://github.com/wkentaro/gruff/pull/32))
-
 
 ## 0.0.1 - 2026-08-27
 

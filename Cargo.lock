@@ -345,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "gruff"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "clap",
  "globset",
