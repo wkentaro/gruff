@@ -2632,6 +2632,53 @@ fn resolves_explicit_config_patterns_from_current_directory() {
 }
 
 #[test]
+fn checks_public_attribute_properties_boundaries() {
+    let directory = create_temp_directory("public-attribute-properties");
+    fs::write(
+        directory.join("fixture.py"),
+        "from dataclasses import dataclass\nfrom typing import ClassVar\n\n\n@dataclass\nclass Model:\n    declared: str\n    kind: ClassVar[str] = \"model\"\n    __slots__ = (\"declared\",)\n\n\nclass Result:\n    class_constant = 1\n\n    def __init__(self):\n        self.name = None\n        self.typed: str = \"value\"\n        self._name = None\n\n    def refresh(self, value):\n        self.name += value\n        self.updated = value\n        self._name = value\n\n    @property\n    def name(self):\n        return self._name\n\n    @name.setter\n    def name(self, value):\n        self._name = value\n\n    def call_setter(self, value):\n        self.name(value)\n\n    @staticmethod\n    def build():\n        self.not_an_instance_store = True\n\n\ndef read(logger):\n    return logger._name\n",
+    )
+    .expect("fixture should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR012",
+            "--output-format",
+            "json",
+            ".",
+        ])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    let findings = findings.as_array().unwrap();
+    assert_eq!(findings.len(), 4);
+    assert!(findings.iter().all(|finding| finding["code"] == "GR012"));
+    let messages: Vec<&str> = findings
+        .iter()
+        .map(|finding| finding["message"].as_str().unwrap())
+        .collect();
+    assert!(
+        messages
+            .iter()
+            .any(|message| { message.contains("Public instance attribute `name`") })
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| { message.contains("Public instance attribute `typed`") })
+    );
+
+    fs::remove_dir_all(directory).expect("temporary fixture should be removed");
+}
+
+#[test]
 fn binds_every_rule_to_its_doc_and_tables() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let directory = root.join("docs/rules");

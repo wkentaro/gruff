@@ -49,7 +49,7 @@ All rules are opt-in. Use an exact code such as `GR001` to adopt rules individua
 
 ## Rules at a glance
 
-The first release tests ten theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, non-public definitions are easier to understand when their names carry their purpose, comments are worth reading when they state more than the code beneath them, tests are worth running when an exception can still fail them, a body is easier to follow when its trailing condition inverts into a guard, a branch is easier to verify when its condition states the positive form, and a non-public module binding is easier to find when it lives in the one definition that reads it.
+The first release tests twelve theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, non-public definitions are easier to understand when their names carry their purpose, comments are worth reading when they state more than the code beneath them, tests are worth running when an exception can still fail them, a body is easier to follow when its trailing condition inverts into a guard, a branch is easier to verify when its condition states the positive form, a non-public module binding is easier to find when it lives in the one definition that reads it, and public instance state is easier to evolve when callers go through explicit properties.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
@@ -64,6 +64,7 @@ The first release tests ten theses: inputs are easier to trace when definitions 
 | GR009 | [`no-guarded-tails`](rules/no-guarded-tails.md) | Trailing conditions invert into guards instead of nesting the rest of the body. |
 | GR010 | [`positive-branch-conditions`](rules/positive-branch-conditions.md) | Branch conditions state the positive form instead of negating around an `else`. |
 | GR011 | [`no-single-consumer-module-bindings`](rules/no-single-consumer-module-bindings.md) | Non-public module bindings live in the one definition that reads them. |
+| GR012 | [`public-attribute-properties`](rules/public-attribute-properties.md) | Public instance state uses underscore-prefixed storage and an explicit property. |
 
 Each page above is the rule doc: what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
 

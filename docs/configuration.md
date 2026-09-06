@@ -7,7 +7,7 @@ Gruff reads configuration only from `pyproject.toml`:
 output-format = "full"
 
 [tool.gruff.lint]
-select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006", "GR007", "GR008", "GR009", "GR010", "GR011"]
+select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006", "GR007", "GR008", "GR009", "GR010", "GR011", "GR012"]
 ignore = []
 per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
@@ -162,4 +162,17 @@ GR011 reads one module at a time, so it cannot see another module importing a no
 ```toml
 [tool.ruff.lint]
 extend-select = ["PLC2701"]
+```
+
+### Public attributes (GR012)
+
+GR012 flags direct public instance stores such as `self.name = value` and
+leaves class-level declarations to the framework that defines them. Ruff
+`SLF001` (`private-member-access`) supplies the companion access check for
+`logger._name`; it allows `logger.name`, so enable both rules when enforcing
+the complete property boundary:
+
+```toml
+[tool.ruff.lint]
+extend-select = ["SLF001"]
 ```
