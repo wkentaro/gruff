@@ -57,13 +57,14 @@ impl<'a> Visitor<'a> for ClassVisitor {
                 }
             }
             for method in methods {
-                // Construction receives a class even without a classmethod decorator.
-                if method.name.as_str() == "__new__"
-                    || method.decorator_list.iter().any(|decorator| {
-                        matches_builtin(&decorator.expression, "staticmethod")
-                            || matches_builtin(&decorator.expression, "classmethod")
-                    })
-                {
+                // These hooks receive a class even without a classmethod decorator.
+                if matches!(
+                    method.name.as_str(),
+                    "__new__" | "__init_subclass__" | "__class_getitem__"
+                ) || method.decorator_list.iter().any(|decorator| {
+                    matches_builtin(&decorator.expression, "staticmethod")
+                        || matches_builtin(&decorator.expression, "classmethod")
+                }) {
                     continue;
                 }
                 let Some(receiver) = method
@@ -123,6 +124,9 @@ impl<'a> Visitor<'a> for AttributeVisitor<'a, '_> {
     }
 
     fn visit_expr(&mut self, expression: &'a Expr) {
+        if matches!(expression, Expr::Lambda(_)) {
+            return;
+        }
         if let Expr::Attribute(attribute) = expression
             && attribute.ctx == ExprContext::Store
             && !attribute.attr.starts_with('_')

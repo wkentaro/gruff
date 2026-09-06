@@ -2903,6 +2903,16 @@ fn checks_public_data_properties_conformance_cases() {
             &[],
         ),
         (
+            "implicit_class_methods",
+            "class Result:\n    def __init__(self):\n        self.value = 0\n    def __init_subclass__(cls):\n        cls.value = 1\n    def __class_getitem__(cls, key):\n        cls.value = key\n        return cls\n",
+            &["value"],
+        ),
+        (
+            "lambda_scope",
+            "class Result:\n    def build(self):\n        self.value = 0\n        return lambda self: [item for self.value in range(2) for item in [self.value]]\n",
+            &["value"],
+        ),
+        (
             "qualified_decorators",
             "class Result:\n    @builtins.staticmethod\n    def update(self):\n        self.value = 1\n    @builtins.classmethod\n    def build(cls):\n        cls.value = 1\n    @builtins.property\n    def value(self):\n        return self._value\n    def declare(self):\n        self.value: int\n",
             &[],
@@ -2958,6 +2968,14 @@ fn checks_public_data_properties_conformance_cases() {
             serde_json::from_slice(&output.stdout).expect("output should be JSON");
         let findings = findings.as_array().unwrap();
         assert_eq!(findings.len(), expected.len(), "{name}: {findings:?}");
+        match *name {
+            "read_only" => assert_eq!(findings[0]["location"]["row"], 7),
+            "nested_scopes" => assert_eq!(findings[0]["location"]["row"], 11),
+            "implicit_class_methods" | "lambda_scope" => {
+                assert_eq!(findings[0]["location"]["row"], 3);
+            }
+            _ => {}
+        }
         for (finding, attribute) in findings.iter().zip(*expected) {
             assert_eq!(finding["code"], "GR012", "{name}");
             assert_eq!(finding["name"], "public-data-properties");
