@@ -2805,3 +2805,247 @@ fn rejects_unknown_rule() {
         .expect("gruff should run");
     assert_eq!(lowercased.status.code(), Some(2));
 }
+
+#[test]
+fn checks_public_data_properties_conformance_cases() {
+    let directory = create_temp_directory("public-data-properties");
+    let cases: &[(&str, &str, &[&str])] = &[
+        (
+            "public_class",
+            "class Result:\n    def __init__(self):\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "private_class",
+            "class _Result:\n    def __init__(self):\n        self.value: int = 1\n",
+            &["value"],
+        ),
+        (
+            "annotation_only",
+            "class Result:\n    def declare(self):\n        self.value: int\n",
+            &["value"],
+        ),
+        (
+            "assignment_forms",
+            "class Result:\n    async def update(this, /):\n        if ready:\n            this.first = this.second = 1\n            this.third, *this.rest = values\n            this.count += 1\n        for this.item in items:\n            pass\n        with context() as this.resource:\n            pass\n",
+            &[
+                "first", "second", "third", "rest", "count", "item", "resource",
+            ],
+        ),
+        (
+            "internal_storage",
+            "class _Result:\n    def update(self):\n        self._value = 1\n        self.__value: int = 2\n        self.__dict__ = {}\n        self._protocol_ = 3\n",
+            &[],
+        ),
+        (
+            "setter",
+            "class Result:\n    def update(self):\n        self.value = 1\n        self.value += 1\n    @property\n    def value(self):\n        return self._value\n    @value.setter\n    def value(self, value):\n        self._value = value\n",
+            &[],
+        ),
+        (
+            "read_only",
+            "class Result:\n    @property\n    def value(self):\n        return self._value\n    def update(self):\n        self.value: int\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "setter_body",
+            "class Result:\n    @value.setter\n    def value(self, value):\n        self.storage = value\n",
+            &["storage"],
+        ),
+        (
+            "unrelated_setter",
+            "class Result:\n    @other.setter\n    def value(self, value):\n        self.value = value\n",
+            &["value"],
+        ),
+        (
+            "explicit_inherited_setter",
+            "class Result(Base):\n    @Base.value.setter\n    def value(self, value):\n        self._value = value\n    def update(self):\n        self.value = 1\n",
+            &[],
+        ),
+        (
+            "unresolved_inherited_setter",
+            "class Base:\n    @value.setter\n    def value(self, value):\n        self._value = value\nclass Result(Base):\n    def update(self):\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "method_call",
+            "class Result:\n    def update(self):\n        self.run()\n        self.items[0] = 1\n        self.child.value = 2\n        del self.value\n        return self.value\n",
+            &[],
+        ),
+        (
+            "class_fields",
+            "class Result:\n    value: int\n    default: int = 1\n    CONSTANT = 2\n    shared: ClassVar[int] = 3\n    fixed: Final[int] = 4\n",
+            &[],
+        ),
+        (
+            "instance_shadows_class_field",
+            "class Result:\n    shared: ClassVar[int] = 3\n    def update(self):\n        self.shared = 4\n",
+            &["shared"],
+        ),
+        (
+            "descriptors",
+            "class Result:\n    descriptor = Descriptor()\n    @cached_property\n    def cached(self):\n        return 1\n    def update(self):\n        self.descriptor = 2\n        self.cached = 3\n",
+            &["descriptor", "cached"],
+        ),
+        (
+            "slots",
+            "class Result:\n    __slots__ = ('value', '_state')\n    def update(self):\n        self.value = 1\n        self._state = 2\n",
+            &["value"],
+        ),
+        (
+            "framework_fields",
+            "@dataclass\nclass Data:\n    value: int\n@attrs.define\nclass Attrs:\n    value: int = attrs.field()\nclass Model(BaseModel):\n    value: int\n    def update(self):\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "non_instance_methods",
+            "class Result:\n    @staticmethod\n    def update(self):\n        self.value = 1\n    @classmethod\n    def build(cls):\n        cls.value = 1\n    def __new__(cls):\n        cls.value = 1\n",
+            &[],
+        ),
+        (
+            "implicit_class_methods",
+            "class Result:\n    def __init__(self):\n        self.value = 0\n    def __init_subclass__(cls):\n        cls.value = 1\n    def __class_getitem__(cls, key):\n        cls.value = key\n        return cls\n",
+            &["value"],
+        ),
+        (
+            "lambda_scope",
+            "class Result:\n    def build(self):\n        self.value = 0\n        return lambda self: [item for self.value in range(2) for item in [self.value]]\n",
+            &["value"],
+        ),
+        (
+            "qualified_decorators",
+            "class Result:\n    @builtins.staticmethod\n    def update(self):\n        self.value = 1\n    @builtins.classmethod\n    def build(cls):\n        cls.value = 1\n    @builtins.property\n    def value(self):\n        return self._value\n    def declare(self):\n        self.value: int\n",
+            &[],
+        ),
+        (
+            "nested_scopes",
+            "def build():\n    class Outer:\n        @value.setter\n        def value(self, value):\n            self._value = value\n        def update(self):\n            def inner(self):\n                self.value = 1\n            class Inner:\n                def update(self):\n                    self.value = 2\n            self.value = 3\n    return Outer()\n",
+            &["value"],
+        ),
+        (
+            "outside_receiver",
+            "def update(self):\n    self.value = 1\nclass Result:\n    def update(self, other):\n        alias = self\n        alias.value = 2\n        other.value = 3\n        setattr(self, 'value', 4)\n",
+            &[],
+        ),
+        (
+            "external_private",
+            "class _Result:\n    def __init__(self):\n        self._value = 1\n    @property\n    def value(self):\n        return self._value\nresult = _Result()\nprint(result._value)\nprint(result.value)\n",
+            &[],
+        ),
+        (
+            "suppression",
+            "class Result:\n    def update(self):\n        self.value = 1  # noqa: GR012 -- protocol\n        self.other = 2  # noqa\n        (self\n            .multiline) = 3  # noqa: GR012 -- protocol\n",
+            &[],
+        ),
+        (
+            "wrong_suppression",
+            "class Result:\n    def update(self):\n        self.value = 1  # noqa: GR011\n",
+            &["value"],
+        ),
+    ];
+    for (name, source, expected) in cases {
+        let path = directory.join(format!("{name}.py"));
+        fs::write(&path, source).expect("conformance source should be written");
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                "GR012",
+                "--output-format",
+                "json",
+            ])
+            .arg(&path)
+            .output()
+            .expect("gruff should run");
+        assert!(output.stderr.is_empty(), "{name}: {:?}", output.stderr);
+        assert_eq!(
+            output.status.code(),
+            Some(i32::from(!expected.is_empty())),
+            "{name}"
+        );
+        let findings: Value =
+            serde_json::from_slice(&output.stdout).expect("output should be JSON");
+        let findings = findings.as_array().unwrap();
+        assert_eq!(findings.len(), expected.len(), "{name}: {findings:?}");
+        match *name {
+            "read_only" => assert_eq!(findings[0]["location"]["row"], 7),
+            "nested_scopes" => assert_eq!(findings[0]["location"]["row"], 11),
+            "implicit_class_methods" | "lambda_scope" => {
+                assert_eq!(findings[0]["location"]["row"], 3);
+            }
+            _ => {}
+        }
+        for (finding, attribute) in findings.iter().zip(*expected) {
+            assert_eq!(finding["code"], "GR012", "{name}");
+            assert_eq!(finding["name"], "public-data-properties");
+            assert_eq!(
+                finding["message"],
+                format!(
+                    "Public instance attribute `{attribute}` requires a property setter for writes; use underscore-prefixed storage for internal state"
+                )
+            );
+            assert!(finding["fix"].is_null());
+            let row = finding["location"]["row"].as_u64().unwrap() as usize;
+            let column = finding["location"]["column"].as_u64().unwrap() as usize;
+            assert!(source.lines().nth(row - 1).unwrap()[column - 1..].starts_with(attribute));
+            assert_eq!(finding["end_location"]["column"], column + attribute.len());
+            assert_eq!(finding["noqa_row"], row);
+        }
+    }
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
+fn selects_public_data_properties_with_normal_configuration() {
+    let directory = create_temp_directory("public-data-properties-selection");
+    let source = "class Result:\n    def __init__(self):\n        self.value = 1\n";
+    fs::write(directory.join("finding.py"), source).unwrap();
+    fs::write(directory.join("ignored.py"), source).unwrap();
+    fs::write(
+        directory.join("pyproject.toml"),
+        "[tool.gruff.lint]\nselect = ['GR012']\nper-file-ignores = { 'ignored.py' = ['GR012'] }\n",
+    )
+    .unwrap();
+    for args in [
+        vec!["check", "--output-format", "json", "."],
+        vec!["check", "--select", "GR", "--output-format", "json", "."],
+        vec!["check", "--select", "ALL", "--output-format", "json", "."],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args(args)
+            .current_dir(&directory)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let findings: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(findings.as_array().unwrap().len(), 1);
+        assert_eq!(findings[0]["code"], "GR012");
+        assert_eq!(
+            findings[0]["location"],
+            serde_json::json!({"row": 3, "column": 14})
+        );
+        assert!(
+            findings[0]["filename"]
+                .as_str()
+                .unwrap()
+                .ends_with("finding.py")
+        );
+    }
+    for args in [
+        vec!["check", "--isolated", "--output-format", "json", "."],
+        vec!["check", "--ignore", "GR012", "--output-format", "json", "."],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args(args)
+            .current_dir(&directory)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            serde_json::from_slice::<Value>(&output.stdout).unwrap(),
+            serde_json::json!([])
+        );
+    }
+    fs::remove_dir_all(directory).unwrap();
+}
