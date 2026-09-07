@@ -10,7 +10,7 @@ For this syntactic rule, public definitions are the complement of non-public def
 
 The reasoning matches GR001: a positional-or-keyword input leaves its calling convention to each call site, while a positional-only or keyword-only declaration makes the convention local, deterministic, and enforced at runtime.
 
-Public definitions carry a separate code because their callers can live outside the repository, so the two scopes are adopted independently. An established library can enable GR001 immediately and schedule GR005 for when its public signatures are reviewed. The `GR` and `ALL` selectors enable both, which suits greenfield projects and completed migrations.
+Public definitions carry a separate code so the two scopes are adopted independently. An established library can adopt GR001 after reviewing its non-public calling contracts and schedule GR005 for when its public signatures are reviewed. Either scope can include externally invoked callbacks; the name alone does not establish control over callers. The `GR` and `ALL` selectors enable both, which suits greenfield projects and completed migrations.
 
 ## Example
 
@@ -24,6 +24,10 @@ Public definitions carry a separate code because their callers can live outside 
 
 Before enabling the rule on an established library, review public and protocol definitions for downstream compatibility: migrate the signatures that are free to change, and suppress the contracts that are not.
 
+When the project controls the calling contract, inspect and update callers together with the signature. For framework callbacks and protocol implementations, first establish the external contract. A passing type check does not prove compatibility: dynamically invoked callbacks may be stored behind `Any` or callable types that do not describe their parameters, hiding incompatible argument passing from static analysis.
+
+After changing `/` or `*` placement, run the affected framework lifecycle or a focused smoke test through its actual registration and dispatch path. Check that the callback ran and produced its expected effect without callback errors; a direct call tailored to the new signature is insufficient. The GR001 rule doc gives a [runnable dispatch example](explicit-non-public-input-conventions.md#when-to-suppress) showing why each restriction can break a callback.
+
 Suppress a definition whose contract must keep accepting both positional and keyword calls, since changing it would break callers outside the repository:
 
 ```python
@@ -31,4 +35,4 @@ def format_cost_compat(value: float) -> str:  # noqa: GR005 -- contract accepts 
     return f"${value:.2f}"
 ```
 
-Fix everything else. For a file made entirely of protocol implementations, use a per-file ignore instead of repeating the suppression.
+Fix everything else whose calling contract is free to change. Prefer an inline suppression because it keeps the exception next to its reason. For a file made entirely of such contracts, use a per-file ignore instead.
