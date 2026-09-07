@@ -14,11 +14,12 @@ use super::Diagnostic;
 pub(crate) const CODE: &str = "GR012";
 pub(crate) const NAME: &str = "explicit-instance-data";
 pub(crate) const SUMMARY: &str =
-    "Public instance data is explicit through dataclass fields or properties.";
+    "Public instance data is explicit through class-body annotations or properties.";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     let mut visitor = ClassVisitor {
         diagnostics: Vec::new(),
+        non_instance_aliases: HashSet::new(),
     };
     visitor.visit_body(statements);
     visitor.diagnostics
@@ -26,46 +27,43 @@ pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
 
 struct ClassVisitor {
     diagnostics: Vec<Diagnostic>,
+    non_instance_aliases: HashSet<String>,
 }
 
 impl<'a> Visitor<'a> for ClassVisitor {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
+        let scope_body = match statement {
+            Stmt::ClassDef(class) => Some(class.body.as_slice()),
+            Stmt::FunctionDef(function) => Some(function.body.as_slice()),
+            _ => None,
+        };
+        let outer_aliases = scope_body.map(|body| {
+            let outer = self.non_instance_aliases.clone();
+            collect_non_instance_aliases(body, &mut self.non_instance_aliases);
+            outer
+        });
+        collect_non_instance_aliases(
+            std::slice::from_ref(statement),
+            &mut self.non_instance_aliases,
+        );
         if let Stmt::ClassDef(class) = statement {
             let methods: Vec<_> = class
                 .body
                 .iter()
                 .filter_map(Stmt::as_function_def_stmt)
                 .collect();
-            let is_dataclass = class.decorator_list.iter().any(|decorator| {
-                let expression = match &decorator.expression {
-                    Expr::Call(call) => call.func.as_ref(),
-                    expression => expression,
-                };
-                matches!(expression, Expr::Name(name) if name.id == "dataclass")
-                    || matches!(expression, Expr::Attribute(attribute)
-                        if attribute.attr.as_str() == "dataclass"
-                            && matches!(attribute.value.as_ref(), Expr::Name(name) if name.id == "dataclasses"))
-            });
             let declared_fields: HashSet<_> = class
                 .body
                 .iter()
                 .filter_map(|statement| {
-                    if is_dataclass
-                        && let Stmt::AnnAssign(assignment) = statement
+                    if let Stmt::AnnAssign(assignment) = statement
                         && let Expr::Name(name) = assignment.target.as_ref()
+                        && !is_non_instance_annotation(
+                            &assignment.annotation,
+                            &self.non_instance_aliases,
+                        )
                     {
-                        let annotation = match assignment.annotation.as_ref() {
-                            Expr::Subscript(subscript) => subscript.value.as_ref(),
-                            expression => expression,
-                        };
-                        let annotation_name = match annotation {
-                            Expr::Name(name) => name.id.as_str(),
-                            Expr::Attribute(attribute) => attribute.attr.as_str(),
-                            _ => "",
-                        };
-                        // These annotations describe class state or constructor inputs, not fields.
-                        (!matches!(annotation_name, "ClassVar" | "InitVar"))
-                            .then_some(name.id.as_str())
+                        Some(name.id.as_str())
                     } else {
                         None
                     }
@@ -123,6 +121,45 @@ impl<'a> Visitor<'a> for ClassVisitor {
         }
         // Each nested class owns its own receiver and property declarations.
         walk_stmt(self, statement);
+        if let Some(outer) = outer_aliases {
+            self.non_instance_aliases = outer;
+        }
+    }
+}
+
+fn collect_non_instance_aliases(statements: &[Stmt], aliases: &mut HashSet<String>) {
+    for statement in statements {
+        if let Stmt::ImportFrom(import) = statement
+            && import.level == 0
+        {
+            for alias in &import.names {
+                if matches!(
+                    (
+                        import.module.as_ref().map(|name| name.as_str()),
+                        alias.name.as_str()
+                    ),
+                    (Some("typing" | "typing_extensions"), "ClassVar")
+                        | (Some("dataclasses"), "InitVar")
+                ) {
+                    aliases.insert(alias.asname.as_ref().unwrap_or(&alias.name).to_string());
+                }
+            }
+        }
+    }
+}
+
+fn is_non_instance_annotation(annotation: &Expr, aliases: &HashSet<String>) -> bool {
+    match annotation {
+        Expr::Subscript(subscript) => is_non_instance_annotation(&subscript.value, aliases),
+        Expr::StringLiteral(literal) => {
+            ruff_python_parser::parse_expression(literal.value.to_str())
+                .is_ok_and(|parsed| is_non_instance_annotation(parsed.expr(), aliases))
+        }
+        Expr::Name(name) => {
+            matches!(name.id.as_str(), "ClassVar" | "InitVar") || aliases.contains(name.id.as_str())
+        }
+        Expr::Attribute(attribute) => matches!(attribute.attr.as_str(), "ClassVar" | "InitVar"),
+        _ => false,
     }
 }
 
@@ -169,17 +206,19 @@ impl<'a> Visitor<'a> for AttributeVisitor<'a, '_> {
             && !attribute.attr.starts_with('_')
             && matches!(attribute.value.as_ref(), Expr::Name(name) if name.id == self.receiver)
             && !self.setters.contains(attribute.attr.as_str())
+            && (!self.declared_fields.contains(attribute.attr.as_str())
+                || self.properties.contains(attribute.attr.as_str()))
             && !(self.is_annotation_only && self.properties.contains(attribute.attr.as_str()))
         {
             self.diagnostics.push(Diagnostic {
-                message: if self.declared_fields.contains(attribute.attr.as_str()) {
+                message: if self.properties.contains(attribute.attr.as_str()) {
                     format!(
-                        "Write to declared dataclass field `{}`; use private storage and a property, or suppress this write if the public schema is intentional.",
+                        "Write to getter-only property `{}`; use private storage, or declare a setter for intentional public writes.",
                         attribute.attr
                     )
                 } else {
                     format!(
-                        "Instance data field `{}` is implicit; use private storage for internal state, or declare a dataclass field or property for public access.",
+                        "Instance data field `{}` is implicit; use private storage for internal state, or declare a class-body annotation or property for public access.",
                         attribute.attr
                     )
                 },

@@ -2,21 +2,23 @@
 
 ## What it does
 
-Flags each direct store to a public attribute of an instance method's first positional parameter, unless that class declares a setter for the same name. The finding points at the attribute name, with the diagnostic ``Instance data field `<name>` is implicit; use private storage for internal state, or declare a dataclass field or property for public access.``. Public means the attribute name does not start with `_`; a class name starting with `_` does not exempt its fields.
+Flags each direct store to a public attribute of an instance method's first positional parameter, unless that class explicitly declares the instance field or a setter for the same name. An annotation directly in the same class body declares the field, with or without a default. This applies equally to ordinary classes, dataclasses, attrs classes, and Pydantic models; no framework recognition is required. An annotation inside a method, such as `self.value: int = 1`, does not declare a class interface.
+
+The finding points at the attribute name, with the diagnostic ``Instance data field `<name>` is implicit; use private storage for internal state, or declare a class-body annotation or property for public access.``. Public means the attribute name does not start with `_`; a class name starting with `_` does not exempt its fields.
 
 The rule covers ordinary, annotated (including annotation-only), augmented, chained, and unpacking assignments, as well as `for` and `with` targets, anywhere in a method's control flow, including outside `__init__`. A receiver may have any name and may be positional-only. Reads, method calls, item mutation, and deletion are not stores of an attribute and are outside this rule.
 
-A same-class `@name.setter` on a method named `name` permits writes; `@Base.name.setter` also explicitly declares a local setter. `@property` alone permits annotation-only declarations but does not permit writes. Bare `property`, `staticmethod`, `classmethod`, and their `builtins.` spellings are recognized syntactically. Static methods, class methods (including the implicit `__init_subclass__` and `__class_getitem__` hooks), and `__new__` are excluded. Methods must be direct statements of their class body; nested functions (including lambdas) are not followed, but nested classes are checked independently. Import aliases, decorator rebinding, receiver rebinding, and runtime property replacement are not resolved.
+A same-class `@name.setter` on a method named `name` permits writes; `@Base.name.setter` also explicitly declares a local setter. `@property` alone permits annotation-only receiver declarations but does not permit writes, even when the name also has a class-body annotation. Such writes receive the diagnostic ``Write to getter-only property `<name>`; use private storage, or declare a setter for intentional public writes.``. Bare `property`, `staticmethod`, `classmethod`, and their `builtins.` spellings are recognized syntactically. Static methods, class methods (including the implicit `__init_subclass__` and `__class_getitem__` hooks), and `__new__` are excluded. Methods must be direct statements of their class body; nested functions (including lambdas) are not followed, but nested classes are checked independently. Decorator aliases, decorator rebinding, receiver rebinding, and runtime property replacement are not resolved.
 
-For a name annotated directly in a class decorated with `@dataclass` or `@dataclasses.dataclass` (with or without arguments), the diagnostic instead says ``Write to declared dataclass field `<name>`; use private storage and a property, or suppress this write if the public schema is intentional.``. Annotations spelled `ClassVar` or `InitVar`, including qualified and subscripted forms, retain the general diagnostic. This recognizes a local syntactic declaration only; decorator aliases, inherited fields, and runtime field semantics are not inferred. The finding and suppression behavior are unchanged.
+Annotations whose outer name is `ClassVar` or `InitVar` do not declare instance fields. Bare, qualified, subscripted, and quoted forms are recognized, as are direct import aliases from `typing` or `typing_extensions` for `ClassVar` and `dataclasses` for `InitVar`. Alias tracking is syntactic and scoped to imports in the enclosing module, function, or class; rebinding, re-exports, and assignment-based type aliases are not resolved. Unknown annotations, including unparseable quoted annotations, still declare a name; Gruff does not validate annotation types or infer runtime field semantics.
 
 The following boundaries are deliberate:
 
-- **Inherited properties:** bases and the method resolution order are not resolved, even for a base in the same file. A local explicit setter is recognized; suppress writes dispatched to an inherited setter otherwise. Subclasses are not exempt as a whole.
-- **Descriptors:** declarations such as `@cached_property` or `field = Descriptor()` are outside the store shape. Direct writes to those public names still need suppression unless a recognized setter exists. No descriptor behavior is guessed.
-- **Class constants and `ClassVar`:** all class-body fields, including annotation-only declarations and default values, are outside this instance-store rule. A store through the receiver remains in scope even if the class body declares the name as `ClassVar` or `Final`.
-- **Dataclasses, attrs, and models:** generated fields and constructors are outside the source shape. Explicit receiver stores in user-written methods are checked normally; suppress stores required by the schema or framework.
-- **Slots:** strings in `__slots__` are not stores. Direct stores to public slot names are flagged; underscore-prefixed slots are accepted.
+- **Inherited annotations and properties:** bases and the method resolution order are not resolved, even for a base in the same file. A local explicit setter is recognized; suppress writes covered by inherited declarations otherwise. Subclasses are not exempt as a whole.
+- **Descriptors:** declarations such as `@cached_property` or `field = Descriptor()` are outside the store shape. Direct writes to those public names need a class-body annotation, recognized setter, or suppression. No descriptor behavior is guessed.
+- **Class constants and annotations:** class-body assignments are outside this instance-store rule. An unannotated default does not declare instance data, nor does a recognizable `ClassVar` or `InitVar` annotation. Ordinary annotations and `Final` declare the name; frozen-class writes and `Final` reassignment enforcement belong to other tools. Annotations nested under class-body conditionals are not direct declarations and are not recognized.
+- **Dataclasses, attrs, and models:** generated fields and constructors are outside the source shape. Explicit receiver stores in user-written methods are accepted for annotated fields, including in `__init__` and `__post_init__`. Unannotated `attrs.field()` assignments are not recognized; decorators and bases provide no blanket exemption for undeclared names.
+- **Slots:** strings in `__slots__` are not stores. Direct stores to unannotated public slot names are flagged; underscore-prefixed slots are accepted.
 - **Frameworks and protocols:** public spellings mandated externally use a suppression with the contract's reason. Classes with a base or decorator receive no blanket exemption.
 - **Other objects and dynamic writes:** aliases of the receiver, `setattr`, `__dict__` updates, and stores through another object are outside this rule. Gruff does not infer types or validate callers' writes to read-only properties; use a type checker for that contract.
 
@@ -24,7 +26,7 @@ The rule is opt-in, supports normal selection and suppression, and has no autofi
 
 ## Why
 
-A raw public field makes storage an implicit data interface. For a data-carrier class, prefer a dataclass: declared fields and a generated constructor make its data explicit without adding properties for each field. Small predicates do not prevent a class from being a data carrier. When behavior, validation, or read/write control matters, use underscore-prefixed backing storage and properties; a setter is needed only for intentional public writes. State used only inside the class needs an underscore-prefixed name without a property. Public methods remain methods.
+A public field introduced only inside a method makes storage an implicit data interface. Class-body annotations make that interface explicit without changing storage behavior. For a data-carrier class, prefer a dataclass: declared fields and a generated constructor make its data explicit without adding properties for each field. Small predicates do not prevent a class from being a data carrier. When behavior, validation, or read/write control matters, use underscore-prefixed backing storage and properties; a setter is needed only for intentional public writes. State used only inside the class needs an underscore-prefixed name without a property. Public methods remain methods.
 
 This policy applies independently of class or module naming: consumers determine the effective interface, and a non-public helper can later become part of one. The rule does not classify classes by their number of fields or amount of behavior.
 
@@ -49,7 +51,20 @@ class _Result:
     error_message: str | None = None
 ```
 
-Adding `@dataclass` while keeping a handwritten constructor with `self.error_message = ...` does not repair the finding. Explicit receiver stores in methods, including `__post_init__`, remain checked even when they target declared dataclass fields; suppress those writes when the schema requires them. Class-body declarations and generated constructors are outside the source shape, not a blanket exemption for decorated classes.
+A class-body annotation also works with a handwritten constructor or update method, without any decorator:
+
+```python
+class _Result:
+    error_message: str | None
+
+    def __init__(self) -> None:
+        self.error_message = None
+
+    def clear(self) -> None:
+        self.error_message = None
+```
+
+The same declaration permits explicit writes in dataclass and model methods, including `__post_init__`. Undeclared names remain checked.
 
 For state used only by the class, use `_error_message`. When read/write control or behavior matters, expose private backing storage through a property:
 
@@ -78,12 +93,12 @@ Omit the setter and `clear` method if public writes are not needed. External cal
 
 ## When to suppress
 
-Keep an externally imposed public field or a write dispatched to an inherited property or custom descriptor, and name the reason on the attribute's line:
+For a public field you own, prefer a class-body annotation. When the declaration is inherited or a custom descriptor requires an otherwise unrecognized write, and name the reason on the attribute's line:
 
 ```python
-class DownloadError(Exception):
-    def __init__(self, message: str) -> None:
-        self.message = message  # noqa: GR012 -- downstream clients require this field
+class SpecializedResult(ExternalResult):
+    def clear(self) -> None:
+        self.value = None  # noqa: GR012 -- declared by ExternalResult
 ```
 
-For a multiline target, put the suppression on the line containing the attribute name. A per-file ignore can cover files consisting entirely of framework data models. Exclude generated or vendored output in the consuming project, while keeping project-owned generators subject to the rule. Suppression records a deliberate contract; blindly renaming a field can break its callers.
+For a multiline target, put the suppression on the line containing the attribute name. Exclude generated or vendored output in the consuming project, while keeping project-owned generators subject to the rule. Suppression records a deliberate contract; blindly renaming a field can break its callers.

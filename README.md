@@ -64,7 +64,7 @@ The first release tests eleven theses: inputs are easier to trace when definitio
 | GR009 | [`no-guarded-tails`](https://wkentaro.github.io/gruff/rules/no-guarded-tails/) | Trailing conditions invert into guards instead of nesting the rest of the body. |
 | GR010 | [`positive-branch-conditions`](https://wkentaro.github.io/gruff/rules/positive-branch-conditions/) | Branch conditions state the positive form instead of negating around an `else`. |
 | GR011 | [`no-single-consumer-module-bindings`](https://wkentaro.github.io/gruff/rules/no-single-consumer-module-bindings/) | Non-public module bindings live in the one definition that reads them. |
-| GR012 | [`explicit-instance-data`](https://wkentaro.github.io/gruff/rules/explicit-instance-data/) | Public instance data is explicit through dataclass fields or properties. |
+| GR012 | [`explicit-instance-data`](https://wkentaro.github.io/gruff/rules/explicit-instance-data/) | Public instance data is explicit through class-body annotations or properties. |
 
 Each rule links to its rule doc, which states what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
 
