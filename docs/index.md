@@ -68,4 +68,12 @@ The first release tests eleven theses: inputs are easier to trace when definitio
 
 Each page above is the rule doc: what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
 
+## Out of scope
+
+Gruff does not currently flag potential duplicate-keyword failures in same-name positional-only forwarding: a wrapper accepts a positional-only parameter and `**kwargs`, then passes an explicit keyword with that parameter's name alongside the forwarded mapping, such as `target(value=value, **kwargs)`. A collision can intentionally reject a reserved key; runtime failure alone does not establish an accidental defect.
+
+The [evaluation in #81](https://github.com/wkentaro/gruff/issues/81#issuecomment-5563973445) covered 370 regular Python files at six pinned repository revisions and found no callables combining positional-only parameters with `**kwargs`, hence zero candidates. Precision is undefined (0/0). This provides insufficient evidence for a precise rule that flags only accidental failures.
+
+Reconsideration requires recurring, independently verified accidental defects and a precise syntactic boundary evaluated against intentional rejection and unresolved cases. Renamed outgoing keywords and other value sources require separate evidence.
+
 Next: [configuration and the CLI](configuration.md).
