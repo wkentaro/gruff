@@ -222,7 +222,7 @@ impl<'a> Visitor<'a> for AttributeVisitor<'a, '_> {
                     )
                 } else {
                     format!(
-                        "Instance data field `{}` is implicit; use private storage for internal state, or declare a class-body annotation or property for public access.",
+                        "Instance data field `{}` is implicit; use private storage for internal state, or declare instance data or expose a property for public access.",
                         attribute.attr
                     )
                 },

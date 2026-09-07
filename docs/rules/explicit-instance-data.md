@@ -4,7 +4,7 @@
 
 Flags each direct store to a public attribute of an instance method's first positional parameter, unless that class explicitly declares the instance field or a setter for the same name. An annotation directly in the same class body declares the field, with or without a default. This applies equally to ordinary classes, dataclasses, attrs classes, and Pydantic models; no framework recognition is required. An annotation inside a method, such as `self.value: int = 1`, does not declare a class interface.
 
-The finding points at the attribute name, with the diagnostic ``Instance data field `<name>` is implicit; use private storage for internal state, or declare a class-body annotation or property for public access.``. Public means the attribute name does not start with `_`; a class name starting with `_` does not exempt its fields.
+The finding points at the attribute name, with the diagnostic ``Instance data field `<name>` is implicit; use private storage for internal state, or declare instance data or expose a property for public access.``. Public means the attribute name does not start with `_`; a class name starting with `_` does not exempt its fields.
 
 The rule covers ordinary, annotated (including annotation-only), augmented, chained, and unpacking assignments, as well as `for` and `with` targets, anywhere in a method's control flow, including outside `__init__`. A receiver may have any name and may be positional-only. Reads, method calls, item mutation, and deletion are not stores of an attribute and are outside this rule.
 

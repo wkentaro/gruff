@@ -3082,7 +3082,7 @@ fn checks_explicit_instance_data_conformance_cases() {
                     )
                 } else {
                     format!(
-                        "Instance data field `{attribute}` is implicit; use private storage for internal state, or declare a class-body annotation or property for public access."
+                        "Instance data field `{attribute}` is implicit; use private storage for internal state, or declare instance data or expose a property for public access."
                     )
                 }
             );
