@@ -2807,8 +2807,8 @@ fn rejects_unknown_rule() {
 }
 
 #[test]
-fn checks_public_data_properties_conformance_cases() {
-    let directory = create_temp_directory("public-data-properties");
+fn checks_explicit_instance_data_conformance_cases() {
+    let directory = create_temp_directory("explicit-instance-data");
     let cases: &[(&str, &str, &[&str])] = &[
         (
             "public_class",
@@ -2895,6 +2895,101 @@ fn checks_public_data_properties_conformance_cases() {
         (
             "framework_fields",
             "@dataclass\nclass Data:\n    value: int\n@attrs.define\nclass Attrs:\n    value: int = attrs.field()\nclass Model(BaseModel):\n    value: int\n    def update(self):\n        self.value = 1\n",
+            &[],
+        ),
+        (
+            "dataclass_explicit_writes",
+            "@dataclass\nclass Data:\n    value: int\n    def __init__(self, value):\n        self.value = value\n    def __post_init__(self):\n        self.value = 1\n    def update(self):\n        self.value += 1\n",
+            &[],
+        ),
+        (
+            "qualified_dataclass_write",
+            "@dataclasses.dataclass(eq=False)\nclass Data:\n    value: int\n    def update(self):\n        self.value = 1\n",
+            &[],
+        ),
+        (
+            "dataclass_undeclared_write",
+            "@dataclass\nclass Data:\n    value: int\n    def update(self):\n        self.other = 1\n",
+            &["other"],
+        ),
+        (
+            "ordinary_class_declared_write",
+            "class Data:\n    value: int\n    def update(self):\n        self.value = 1\n",
+            &[],
+        ),
+        (
+            "dataclass_pseudo_fields",
+            "@dataclass\nclass Data:\n    shared: ClassVar[int]\n    incoming: dataclasses.InitVar[int]\n    def update(self):\n        self.shared = 1\n        self.incoming = 2\n",
+            &["shared", "incoming"],
+        ),
+        (
+            "declared_assignment_forms",
+            "class Result:\n    first: int\n    second: int = 0\n    rest: list[int]\n    item: int\n    resource: object\n    async def update(this, /):\n        this.first: int\n        this.first = this.second = 1\n        this.first, *this.rest = values\n        this.second += 1\n        for this.item in items:\n            pass\n        with context() as this.resource:\n            pass\n",
+            &[],
+        ),
+        (
+            "annotated_read_only",
+            "class Result:\n    value: int\n    @property\n    def value(self):\n        return self._value\n    def update(self):\n        self.value: int\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "annotated_setter",
+            "class Result:\n    value: int\n    @property\n    def value(self):\n        return self._value\n    @value.setter\n    def value(self, value):\n        self._value = value\n    def update(self):\n        self.value = 1\n",
+            &[],
+        ),
+        (
+            "inherited_annotations",
+            "class Base:\n    value: int\nclass Local(Base):\n    def update(self):\n        self.value = 1\nclass Imported(ExternalBase):\n    def update(self):\n        self.value = 2\n",
+            &["value", "value"],
+        ),
+        (
+            "quoted_and_aliased_pseudo_fields",
+            "from typing import ClassVar as CV\nfrom typing_extensions import ClassVar as Shared\nfrom dataclasses import InitVar as Input\nimport typing as t\nclass Result:\n    first: CV[int]\n    second: \"Shared[int]\"\n    third: \"Input[int]\"\n    fourth: \"t.ClassVar[int]\"\n    fifth: \"dataclasses.InitVar[int]\"\n    value: \"Result\"\n    invalid: \"not valid [\"\n    def update(self):\n        self.first = 1\n        self.second = 2\n        self.third = 3\n        self.fourth = 4\n        self.fifth = 5\n        self.value = self\n        self.invalid = None\n",
+            &["first", "second", "third", "fourth", "fifth"],
+        ),
+        (
+            "scoped_annotation_aliases",
+            "def build():\n    from typing import ClassVar as CV\n    class Local:\n        value: CV[int]\n        def update(self):\n            self.value = 1\nclass Independent:\n    value: CV[int]\n    def update(self):\n        self.value = 2\nclass LocalImport:\n    from dataclasses import InitVar as Input\n    value: Input[int]\n    def update(self):\n        self.value = 3\n",
+            &["value", "value"],
+        ),
+        (
+            "class_local_annotation_alias_scope",
+            "from typing import List as Field\nclass Outer:\n    from typing import ClassVar as Field\n    shared: Field[int]\n    def update(self):\n        self.shared = 1\n    class Inner:\n        value: Field[int]\n        def update(self):\n            self.value = []\n    def build(self):\n        class Inner:\n            value: Field[int]\n            def update(self):\n                self.value = []\n",
+            &["shared"],
+        ),
+        (
+            "conditional_class_annotation_aliases",
+            "from typing import TYPE_CHECKING\nclass Result:\n    if TYPE_CHECKING:\n        from typing import ClassVar as CV\n    try:\n        from dataclasses import InitVar as Input\n    except ImportError:\n        pass\n    shared: \"CV[int]\"\n    incoming: \"Input[int]\"\n    def update(self):\n        self.shared = 1\n        self.incoming = 2\n",
+            &["shared", "incoming"],
+        ),
+        (
+            "conditional_lexical_annotation_aliases",
+            "if TYPE_CHECKING:\n    from typing import ClassVar as CV\nclass Global:\n    value: \"CV[int]\"\n    def update(self):\n        self.value = 1\ndef build():\n    if TYPE_CHECKING:\n        from dataclasses import InitVar as Input\n    class Local:\n        value: \"Input[int]\"\n        def update(self):\n            self.value = 2\nclass Independent:\n    value: \"Input[int]\"\n    def update(self):\n        self.value = 3\n",
+            &["value", "value"],
+        ),
+        (
+            "unrelated_annotation_alias",
+            "from custom import ClassVar as Field\nclass Result:\n    value: Field[int]\n    def update(self):\n        self.value = 1\n",
+            &[],
+        ),
+        (
+            "frozen_final_and_annotated_descriptors",
+            "@dataclass(frozen=True)\nclass Result:\n    fixed: Final[int]\n    descriptor: int = Descriptor()\n    def update(self):\n        self.fixed = 1\n        self.descriptor = 2\n",
+            &[],
+        ),
+        (
+            "unannotated_attrs_field",
+            "@attrs.define\nclass Result:\n    value = attrs.field()\n    def update(self):\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "conditional_annotation",
+            "class Result:\n    if condition:\n        value: int\n    def update(self):\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "nested_annotation_scope",
+            "class Outer:\n    value: int\n    def update(self):\n        self.value = 1\n        class Inner:\n            def update(self):\n                self.value = 2\n",
             &["value"],
         ),
         (
@@ -2978,12 +3073,18 @@ fn checks_public_data_properties_conformance_cases() {
         }
         for (finding, attribute) in findings.iter().zip(*expected) {
             assert_eq!(finding["code"], "GR012", "{name}");
-            assert_eq!(finding["name"], "public-data-properties");
+            assert_eq!(finding["name"], "explicit-instance-data");
             assert_eq!(
                 finding["message"],
-                format!(
-                    "Public instance attribute `{attribute}` requires a property setter for writes; use underscore-prefixed storage for internal state"
-                )
+                if matches!(*name, "read_only" | "annotated_read_only") {
+                    format!(
+                        "Write to getter-only property `{attribute}`; use private storage, or declare a setter for intentional public writes."
+                    )
+                } else {
+                    format!(
+                        "Instance data field `{attribute}` is implicit; use private storage for internal state, or declare instance data or expose a property for public access."
+                    )
+                }
             );
             assert!(finding["fix"].is_null());
             let row = finding["location"]["row"].as_u64().unwrap() as usize;
@@ -2997,8 +3098,8 @@ fn checks_public_data_properties_conformance_cases() {
 }
 
 #[test]
-fn selects_public_data_properties_with_normal_configuration() {
-    let directory = create_temp_directory("public-data-properties-selection");
+fn selects_explicit_instance_data_with_normal_configuration() {
+    let directory = create_temp_directory("explicit-instance-data-selection");
     let source = "class Result:\n    def __init__(self):\n        self.value = 1\n";
     fs::write(directory.join("finding.py"), source).unwrap();
     fs::write(directory.join("ignored.py"), source).unwrap();

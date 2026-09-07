@@ -133,11 +133,11 @@ const RULES: &[Rule] = &[
         check: RuleCheck::Ast(rules::no_single_consumer_module_bindings::check),
     },
     Rule {
-        code: rules::public_data_properties::CODE,
-        name: rules::public_data_properties::NAME,
-        summary: rules::public_data_properties::SUMMARY,
-        document: include_str!("../docs/rules/public-data-properties.md"),
-        check: RuleCheck::Ast(rules::public_data_properties::check),
+        code: rules::explicit_instance_data::CODE,
+        name: rules::explicit_instance_data::NAME,
+        summary: rules::explicit_instance_data::SUMMARY,
+        document: include_str!("../docs/rules/explicit-instance-data.md"),
+        check: RuleCheck::Ast(rules::explicit_instance_data::check),
     },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
