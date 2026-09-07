@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.0.9 - 2026-09-07
+
+### Changed
+
+- **Breaking:** Rename GR012 from `public-data-properties` to `explicit-instance-data` in rule lookup, output, and documentation, preserving code-based selection and suppression. Accept public instance fields annotated directly in the same class body, regardless of framework, while preserving getter-only property checks and excluding recognizable `ClassVar` and `InitVar` annotations, including quoted forms and direct import aliases. Clarify private-storage, instance-data declaration, and property repairs without suggesting that ClassVar or InitVar annotations declare instance fields. ([#86](https://github.com/wkentaro/gruff/pull/86))
+
 ## 0.0.8 - 2026-09-06
 
 ### Added
