@@ -59,4 +59,4 @@ def _handler(request: Request, context: Context) -> Response:  # noqa: GR001 -- 
     return respond(request, context)
 ```
 
-Prefer an inline suppression because it keeps the exception next to its reason. For a file made entirely of such contracts, use a per-file ignore instead.
+Prefer an inline suppression because it keeps the exception next to its reason. Before introducing a per-file ignore for GR001, run the rule without that ignore and audit every GR001 finding in every matched file, including reviewing existing inline exceptions. Use a per-file ignore only when all GR001 findings share the same intentional contract exception. Fix unrelated findings and keep inline suppressions for exceptions with different reasons. A per-file ignore also hides future GR001 findings, even when they are unrelated to the audited exception.
