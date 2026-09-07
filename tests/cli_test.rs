@@ -2903,6 +2903,26 @@ fn checks_explicit_instance_data_conformance_cases() {
             &["value", "value", "value"],
         ),
         (
+            "qualified_dataclass_write",
+            "@dataclasses.dataclass(eq=False)\nclass Data:\n    value: int\n    def update(self):\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "dataclass_undeclared_write",
+            "@dataclass\nclass Data:\n    value: int\n    def update(self):\n        self.other = 1\n",
+            &["other"],
+        ),
+        (
+            "ordinary_class_declared_write",
+            "class Data:\n    value: int\n    def update(self):\n        self.value = 1\n",
+            &["value"],
+        ),
+        (
+            "dataclass_pseudo_fields",
+            "@dataclass\nclass Data:\n    shared: ClassVar[int]\n    incoming: dataclasses.InitVar[int]\n    def update(self):\n        self.shared = 1\n        self.incoming = 2\n",
+            &["shared", "incoming"],
+        ),
+        (
             "non_instance_methods",
             "class Result:\n    @staticmethod\n    def update(self):\n        self.value = 1\n    @classmethod\n    def build(cls):\n        cls.value = 1\n    def __new__(cls):\n        cls.value = 1\n",
             &[],
@@ -2986,9 +3006,18 @@ fn checks_explicit_instance_data_conformance_cases() {
             assert_eq!(finding["name"], "explicit-instance-data");
             assert_eq!(
                 finding["message"],
-                format!(
-                    "Instance data field `{attribute}` is implicit; declare it as a dataclass field or expose it through a property."
-                )
+                if matches!(
+                    *name,
+                    "dataclass_explicit_writes" | "qualified_dataclass_write"
+                ) {
+                    format!(
+                        "Write to declared dataclass field `{attribute}`; use private storage and a property, or suppress this write if the public schema is intentional."
+                    )
+                } else {
+                    format!(
+                        "Instance data field `{attribute}` is implicit; use private storage for internal state, or declare a dataclass field or property for public access."
+                    )
+                }
             );
             assert!(finding["fix"].is_null());
             let row = finding["location"]["row"].as_u64().unwrap() as usize;

@@ -2,11 +2,13 @@
 
 ## What it does
 
-Flags each direct store to a public attribute of an instance method's first positional parameter, unless that class declares a setter for the same name. The finding points at the attribute name, with the diagnostic ``Instance data field `<name>` is implicit; declare it as a dataclass field or expose it through a property.``. Public means the attribute name does not start with `_`; a class name starting with `_` does not exempt its fields.
+Flags each direct store to a public attribute of an instance method's first positional parameter, unless that class declares a setter for the same name. The finding points at the attribute name, with the diagnostic ``Instance data field `<name>` is implicit; use private storage for internal state, or declare a dataclass field or property for public access.``. Public means the attribute name does not start with `_`; a class name starting with `_` does not exempt its fields.
 
 The rule covers ordinary, annotated (including annotation-only), augmented, chained, and unpacking assignments, as well as `for` and `with` targets, anywhere in a method's control flow, including outside `__init__`. A receiver may have any name and may be positional-only. Reads, method calls, item mutation, and deletion are not stores of an attribute and are outside this rule.
 
 A same-class `@name.setter` on a method named `name` permits writes; `@Base.name.setter` also explicitly declares a local setter. `@property` alone permits annotation-only declarations but does not permit writes. Bare `property`, `staticmethod`, `classmethod`, and their `builtins.` spellings are recognized syntactically. Static methods, class methods (including the implicit `__init_subclass__` and `__class_getitem__` hooks), and `__new__` are excluded. Methods must be direct statements of their class body; nested functions (including lambdas) are not followed, but nested classes are checked independently. Import aliases, decorator rebinding, receiver rebinding, and runtime property replacement are not resolved.
+
+For a name annotated directly in a class decorated with `@dataclass` or `@dataclasses.dataclass` (with or without arguments), the diagnostic instead says ``Write to declared dataclass field `<name>`; use private storage and a property, or suppress this write if the public schema is intentional.``. Annotations spelled `ClassVar` or `InitVar`, including qualified and subscripted forms, retain the general diagnostic. This recognizes a local syntactic declaration only; decorator aliases, inherited fields, and runtime field semantics are not inferred. The finding and suppression behavior are unchanged.
 
 The following boundaries are deliberate:
 

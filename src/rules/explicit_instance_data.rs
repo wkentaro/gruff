@@ -36,6 +36,41 @@ impl<'a> Visitor<'a> for ClassVisitor {
                 .iter()
                 .filter_map(Stmt::as_function_def_stmt)
                 .collect();
+            let is_dataclass = class.decorator_list.iter().any(|decorator| {
+                let expression = match &decorator.expression {
+                    Expr::Call(call) => call.func.as_ref(),
+                    expression => expression,
+                };
+                matches!(expression, Expr::Name(name) if name.id == "dataclass")
+                    || matches!(expression, Expr::Attribute(attribute)
+                        if attribute.attr.as_str() == "dataclass"
+                            && matches!(attribute.value.as_ref(), Expr::Name(name) if name.id == "dataclasses"))
+            });
+            let declared_fields: HashSet<_> = class
+                .body
+                .iter()
+                .filter_map(|statement| {
+                    if is_dataclass
+                        && let Stmt::AnnAssign(assignment) = statement
+                        && let Expr::Name(name) = assignment.target.as_ref()
+                    {
+                        let annotation = match assignment.annotation.as_ref() {
+                            Expr::Subscript(subscript) => subscript.value.as_ref(),
+                            expression => expression,
+                        };
+                        let annotation_name = match annotation {
+                            Expr::Name(name) => name.id.as_str(),
+                            Expr::Attribute(attribute) => attribute.attr.as_str(),
+                            _ => "",
+                        };
+                        // These annotations describe class state or constructor inputs, not fields.
+                        (!matches!(annotation_name, "ClassVar" | "InitVar"))
+                            .then_some(name.id.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
             let mut properties = HashSet::new();
             let mut setters = HashSet::new();
             for method in &methods {
@@ -77,6 +112,7 @@ impl<'a> Visitor<'a> for ClassVisitor {
                 };
                 AttributeVisitor {
                     receiver: receiver.name().as_str(),
+                    declared_fields: &declared_fields,
                     properties: &properties,
                     setters: &setters,
                     is_annotation_only: false,
@@ -103,6 +139,7 @@ fn matches_builtin(expression: &Expr, expected: &str) -> bool {
 
 struct AttributeVisitor<'a, 'b> {
     receiver: &'a str,
+    declared_fields: &'b HashSet<&'a str>,
     properties: &'b HashSet<&'a str>,
     setters: &'b HashSet<&'a str>,
     is_annotation_only: bool,
@@ -135,10 +172,17 @@ impl<'a> Visitor<'a> for AttributeVisitor<'a, '_> {
             && !(self.is_annotation_only && self.properties.contains(attribute.attr.as_str()))
         {
             self.diagnostics.push(Diagnostic {
-                message: format!(
-                    "Instance data field `{}` is implicit; declare it as a dataclass field or expose it through a property.",
-                    attribute.attr
-                ),
+                message: if self.declared_fields.contains(attribute.attr.as_str()) {
+                    format!(
+                        "Write to declared dataclass field `{}`; use private storage and a property, or suppress this write if the public schema is intentional.",
+                        attribute.attr
+                    )
+                } else {
+                    format!(
+                        "Instance data field `{}` is implicit; use private storage for internal state, or declare a dataclass field or property for public access.",
+                        attribute.attr
+                    )
+                },
                 range: attribute.attr.range(),
                 noqa_offset: None,
             });
