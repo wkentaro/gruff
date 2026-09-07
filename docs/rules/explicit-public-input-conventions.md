@@ -31,4 +31,4 @@ def format_cost_compat(value: float) -> str:  # noqa: GR005 -- contract accepts 
     return f"${value:.2f}"
 ```
 
-Fix everything else. For a file made entirely of protocol implementations, use a per-file ignore instead of repeating the suppression.
+Fix everything else. Prefer an inline suppression because it keeps the exception next to its reason. Before introducing a per-file ignore for GR005, run the rule without that ignore and audit every GR005 finding in every matched file, including reviewing existing inline exceptions. Use a per-file ignore only when all GR005 findings share the same intentional contract exception. Fix unrelated findings and keep inline suppressions for exceptions with different reasons. A per-file ignore also hides future GR005 findings, even when they are unrelated to the audited exception.

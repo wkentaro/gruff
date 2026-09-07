@@ -9,7 +9,6 @@ output-format = "full"
 [tool.gruff.lint]
 select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006", "GR007", "GR008", "GR009", "GR010", "GR011", "GR012"]
 ignore = []
-per-file-ignores = { "callbacks.py" = ["GR001"] }
 ```
 
 `output-format` accepts `full`, `concise`, `json`, or `github`. Rule selectors accept an exact code, the `GR` prefix, or `ALL`; the more specific selector wins when `select` and `ignore` overlap, and `ignore` wins ties.
@@ -55,7 +54,22 @@ A bare `# noqa` suppresses every rule on the line, and `# noqa: GR001,GR002` sup
 
 The directive does not have to start the comment. It may follow other comment text, as in `EXTERNAL_NAME = 1  # external spelling  # noqa: GR004`, or a doubled hash, as in `EXTERNAL_NAME = 1  ## noqa: GR004`. Prose after the code list is ignored, so `EXTERNAL_NAME = 1  # noqa: GR004 -- public protocol spelling` still suppresses GR004 alone. A hash glued to preceding text never starts a directive — stricter than Ruff, which reads it as a directive — so a `#` inside a URL is not read as one. Codes must be delimited, so `# noqa:GR001GR002` suppresses nothing — Ruff instead splits the run and suppresses both codes.
 
-Prefer an inline suppression because it keeps the exception next to its reason. For files made entirely of protocol implementations, use a per-file ignore instead.
+Prefer an inline suppression because it keeps the exception next to its reason. Before introducing a per-file ignore, run each rule you intend to ignore without the per-file ignore and audit every finding in every matched file. Use a per-file ignore only when all findings for each ignored rule share the same intentional contract exception; a file containing protocol implementations may also contain unrelated findings that should be fixed.
+
+For example, audit GR001 in `callbacks.py` without loading configuration:
+
+```console
+gruff check --isolated --select GR001 callbacks.py
+```
+
+`--isolated` bypasses all configuration, including per-file ignores, but still honors inline `# noqa` comments. Review existing inline exceptions too; temporarily remove their directives if you need to see those findings. Fix unrelated findings and keep inline suppressions if the remaining exceptions have different reasons. Only after the audit confirms a shared exception rationale should you add:
+
+```toml
+[tool.gruff.lint]
+per-file-ignores = { "callbacks.py" = ["GR001"] }
+```
+
+A per-file ignore also suppresses future matching findings in those files, even when they have a different cause. The audit covers current findings only; keep reviewing changes to ignored files for unrelated findings.
 
 ## Recommended Ruff pairing
 
