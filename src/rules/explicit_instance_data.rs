@@ -17,9 +17,11 @@ pub(crate) const SUMMARY: &str =
     "Public instance data is explicit through class-body annotations or properties.";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
+    let mut non_instance_aliases = HashSet::new();
+    collect_non_instance_aliases(statements, &mut non_instance_aliases);
     let mut visitor = ClassVisitor {
         diagnostics: Vec::new(),
-        non_instance_aliases: HashSet::new(),
+        non_instance_aliases,
     };
     visitor.visit_body(statements);
     visitor.diagnostics
@@ -32,21 +34,17 @@ struct ClassVisitor {
 
 impl<'a> Visitor<'a> for ClassVisitor {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
-        let scope_body = match statement {
-            Stmt::ClassDef(class) => Some(class.body.as_slice()),
-            Stmt::FunctionDef(function) => Some(function.body.as_slice()),
-            _ => None,
-        };
-        let outer_aliases = scope_body.map(|body| {
+        let outer_aliases = if let Stmt::FunctionDef(function) = statement {
             let outer = self.non_instance_aliases.clone();
-            collect_non_instance_aliases(body, &mut self.non_instance_aliases);
-            outer
-        });
-        collect_non_instance_aliases(
-            std::slice::from_ref(statement),
-            &mut self.non_instance_aliases,
-        );
+            collect_non_instance_aliases(&function.body, &mut self.non_instance_aliases);
+            Some(outer)
+        } else {
+            None
+        };
         if let Stmt::ClassDef(class) = statement {
+            // Class namespaces are not enclosing lexical scopes for methods or nested classes.
+            let mut class_aliases = self.non_instance_aliases.clone();
+            collect_non_instance_aliases(&class.body, &mut class_aliases);
             let methods: Vec<_> = class
                 .body
                 .iter()
@@ -58,10 +56,7 @@ impl<'a> Visitor<'a> for ClassVisitor {
                 .filter_map(|statement| {
                     if let Stmt::AnnAssign(assignment) = statement
                         && let Expr::Name(name) = assignment.target.as_ref()
-                        && !is_non_instance_annotation(
-                            &assignment.annotation,
-                            &self.non_instance_aliases,
-                        )
+                        && !is_non_instance_annotation(&assignment.annotation, &class_aliases)
                     {
                         Some(name.id.as_str())
                     } else {
@@ -128,24 +123,33 @@ impl<'a> Visitor<'a> for ClassVisitor {
 }
 
 fn collect_non_instance_aliases(statements: &[Stmt], aliases: &mut HashSet<String>) {
-    for statement in statements {
-        if let Stmt::ImportFrom(import) = statement
-            && import.level == 0
-        {
-            for alias in &import.names {
-                if matches!(
-                    (
-                        import.module.as_ref().map(|name| name.as_str()),
-                        alias.name.as_str()
-                    ),
-                    (Some("typing" | "typing_extensions"), "ClassVar")
-                        | (Some("dataclasses"), "InitVar")
-                ) {
-                    aliases.insert(alias.asname.as_ref().unwrap_or(&alias.name).to_string());
+    struct ImportVisitor<'a>(&'a mut HashSet<String>);
+
+    impl<'a> Visitor<'a> for ImportVisitor<'_> {
+        fn visit_stmt(&mut self, statement: &'a Stmt) {
+            match statement {
+                Stmt::FunctionDef(_) | Stmt::ClassDef(_) => {}
+                Stmt::ImportFrom(import) if import.level == 0 => {
+                    for alias in &import.names {
+                        if matches!(
+                            (
+                                import.module.as_ref().map(|name| name.as_str()),
+                                alias.name.as_str()
+                            ),
+                            (Some("typing" | "typing_extensions"), "ClassVar")
+                                | (Some("dataclasses"), "InitVar")
+                        ) {
+                            self.0
+                                .insert(alias.asname.as_ref().unwrap_or(&alias.name).to_string());
+                        }
+                    }
                 }
+                _ => walk_stmt(self, statement),
             }
         }
     }
+
+    ImportVisitor(aliases).visit_body(statements);
 }
 
 fn is_non_instance_annotation(annotation: &Expr, aliases: &HashSet<String>) -> bool {

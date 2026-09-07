@@ -10,7 +10,7 @@ The rule covers ordinary, annotated (including annotation-only), augmented, chai
 
 A same-class `@name.setter` on a method named `name` permits writes; `@Base.name.setter` also explicitly declares a local setter. `@property` alone permits annotation-only receiver declarations but does not permit writes, even when the name also has a class-body annotation. Such writes receive the diagnostic ``Write to getter-only property `<name>`; use private storage, or declare a setter for intentional public writes.``. Bare `property`, `staticmethod`, `classmethod`, and their `builtins.` spellings are recognized syntactically. Static methods, class methods (including the implicit `__init_subclass__` and `__class_getitem__` hooks), and `__new__` are excluded. Methods must be direct statements of their class body; nested functions (including lambdas) are not followed, but nested classes are checked independently. Decorator aliases, decorator rebinding, receiver rebinding, and runtime property replacement are not resolved.
 
-Annotations whose outer name is `ClassVar` or `InitVar` do not declare instance fields. Bare, qualified, subscripted, and quoted forms are recognized, as are direct import aliases from `typing` or `typing_extensions` for `ClassVar` and `dataclasses` for `InitVar`. Alias tracking is syntactic and scoped to imports in the enclosing module, function, or class; rebinding, re-exports, and assignment-based type aliases are not resolved. Unknown annotations, including unparseable quoted annotations, still declare a name; Gruff does not validate annotation types or infer runtime field semantics.
+Annotations whose outer name is `ClassVar` or `InitVar` do not declare instance fields. Bare, qualified, subscripted, and quoted forms are recognized, as are direct import aliases from `typing` or `typing_extensions` for `ClassVar` and `dataclasses` for `InitVar`. Alias tracking is syntactic: imports inside control-flow blocks belong to their enclosing scope. Module and function aliases are visible in nested scopes, while class-local aliases apply only to that class’s annotations, not to nested classes or methods. Rebinding, re-exports, and assignment-based type aliases are not resolved. Unknown annotations, including unparseable quoted annotations, still declare a name; Gruff does not validate annotation types or infer runtime field semantics.
 
 The following boundaries are deliberate:
 
@@ -93,7 +93,7 @@ Omit the setter and `clear` method if public writes are not needed. External cal
 
 ## When to suppress
 
-For a public field you own, prefer a class-body annotation. When the declaration is inherited or a custom descriptor requires an otherwise unrecognized write, and name the reason on the attribute's line:
+For a public field you own, prefer a class-body annotation. When the declaration is inherited or a custom descriptor requires an otherwise unrecognized write, suppress the write and name the reason on the attribute's line:
 
 ```python
 class SpecializedResult(ExternalResult):

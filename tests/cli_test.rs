@@ -2953,6 +2953,21 @@ fn checks_explicit_instance_data_conformance_cases() {
             &["value", "value"],
         ),
         (
+            "class_local_annotation_alias_scope",
+            "from typing import List as Field\nclass Outer:\n    from typing import ClassVar as Field\n    shared: Field[int]\n    def update(self):\n        self.shared = 1\n    class Inner:\n        value: Field[int]\n        def update(self):\n            self.value = []\n    def build(self):\n        class Inner:\n            value: Field[int]\n            def update(self):\n                self.value = []\n",
+            &["shared"],
+        ),
+        (
+            "conditional_class_annotation_aliases",
+            "from typing import TYPE_CHECKING\nclass Result:\n    if TYPE_CHECKING:\n        from typing import ClassVar as CV\n    try:\n        from dataclasses import InitVar as Input\n    except ImportError:\n        pass\n    shared: \"CV[int]\"\n    incoming: \"Input[int]\"\n    def update(self):\n        self.shared = 1\n        self.incoming = 2\n",
+            &["shared", "incoming"],
+        ),
+        (
+            "conditional_lexical_annotation_aliases",
+            "if TYPE_CHECKING:\n    from typing import ClassVar as CV\nclass Global:\n    value: \"CV[int]\"\n    def update(self):\n        self.value = 1\ndef build():\n    if TYPE_CHECKING:\n        from dataclasses import InitVar as Input\n    class Local:\n        value: \"Input[int]\"\n        def update(self):\n            self.value = 2\nclass Independent:\n    value: \"Input[int]\"\n    def update(self):\n        self.value = 3\n",
+            &["value", "value"],
+        ),
+        (
             "unrelated_annotation_alias",
             "from custom import ClassVar as Field\nclass Result:\n    value: Field[int]\n    def update(self):\n        self.value = 1\n",
             &[],
