@@ -56,10 +56,10 @@ The directive does not have to start the comment. It may follow other comment te
 
 Prefer an inline suppression because it keeps the exception next to its reason. Before introducing a per-file ignore, run each rule you intend to ignore without the per-file ignore and audit every finding in every matched file. Use a per-file ignore only when all findings for each ignored rule share the same intentional contract exception; a file containing protocol implementations may also contain unrelated findings that should be fixed.
 
-For example, audit GR001 in `callbacks.py` without loading configuration:
+For example, run GR001 from the project root without loading configuration, then audit every `callbacks.py` covered by the proposed ignore. A bare filename pattern such as `"callbacks.py"` also matches that basename in subdirectories wherever this configuration applies:
 
 ```console
-gruff check --isolated --select GR001 callbacks.py
+gruff check --isolated --select GR001 .
 ```
 
 `--isolated` bypasses all configuration, including per-file ignores, but still honors inline `# noqa` comments. Review existing inline exceptions too; temporarily remove their directives if you need to see those findings. Fix unrelated findings and keep inline suppressions if the remaining exceptions have different reasons. Only after the audit confirms a shared exception rationale should you add:
