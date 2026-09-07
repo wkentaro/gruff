@@ -72,6 +72,6 @@ _Avoid_: Correction, finding
 An agent-produced code change made after explicit human feedback about earlier agent-produced code in the same review history.
 _Avoid_: Feedback, edit
 
-**Public data properties**:
-A policy requiring direct public receiver stores in instance methods to use an explicit property setter, with underscore-prefixed backing storage for internal state. Public data names do not start with an underscore, independently of the owning class's name. Class-body schema declarations and inferred runtime interfaces are outside this source shape; Ruff SLF001 supplies the companion rule for external backing-field access.
-_Avoid_: Getter-only classes, private-class exemption, automatic encapsulation
+**Explicit instance data**:
+A policy requiring public instance data to be explicit through dataclass fields or properties, with underscore-prefixed storage for internal state. It flags direct public receiver stores in instance methods without a same-class setter. Public data names do not start with an underscore, independently of the owning class's name. Class-body fields and generated constructors are outside the source shape; explicit writes to declared dataclass fields remain checked. Ruff SLF001 supplies the companion rule for external backing-field access.
+_Avoid_: Public data properties, getter-only classes, private-class exemption, automatic encapsulation

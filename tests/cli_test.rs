@@ -2807,8 +2807,8 @@ fn rejects_unknown_rule() {
 }
 
 #[test]
-fn checks_public_data_properties_conformance_cases() {
-    let directory = create_temp_directory("public-data-properties");
+fn checks_explicit_instance_data_conformance_cases() {
+    let directory = create_temp_directory("explicit-instance-data");
     let cases: &[(&str, &str, &[&str])] = &[
         (
             "public_class",
@@ -2898,6 +2898,11 @@ fn checks_public_data_properties_conformance_cases() {
             &["value"],
         ),
         (
+            "dataclass_explicit_writes",
+            "@dataclass\nclass Data:\n    value: int\n    def __init__(self, value):\n        self.value = value\n    def __post_init__(self):\n        self.value = 1\n    def update(self):\n        self.value += 1\n",
+            &["value", "value", "value"],
+        ),
+        (
             "non_instance_methods",
             "class Result:\n    @staticmethod\n    def update(self):\n        self.value = 1\n    @classmethod\n    def build(cls):\n        cls.value = 1\n    def __new__(cls):\n        cls.value = 1\n",
             &[],
@@ -2978,11 +2983,11 @@ fn checks_public_data_properties_conformance_cases() {
         }
         for (finding, attribute) in findings.iter().zip(*expected) {
             assert_eq!(finding["code"], "GR012", "{name}");
-            assert_eq!(finding["name"], "public-data-properties");
+            assert_eq!(finding["name"], "explicit-instance-data");
             assert_eq!(
                 finding["message"],
                 format!(
-                    "Public instance attribute `{attribute}` requires a property setter for writes; use underscore-prefixed storage for internal state"
+                    "Instance data field `{attribute}` is implicit; declare it as a dataclass field or expose it through a property."
                 )
             );
             assert!(finding["fix"].is_null());
@@ -2997,8 +3002,8 @@ fn checks_public_data_properties_conformance_cases() {
 }
 
 #[test]
-fn selects_public_data_properties_with_normal_configuration() {
-    let directory = create_temp_directory("public-data-properties-selection");
+fn selects_explicit_instance_data_with_normal_configuration() {
+    let directory = create_temp_directory("explicit-instance-data-selection");
     let source = "class Result:\n    def __init__(self):\n        self.value = 1\n";
     fs::write(directory.join("finding.py"), source).unwrap();
     fs::write(directory.join("ignored.py"), source).unwrap();

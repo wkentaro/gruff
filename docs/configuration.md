@@ -164,12 +164,15 @@ GR011 reads one module at a time, so it cannot see another module importing a no
 extend-select = ["PLC2701"]
 ```
 
-### Public instance data (GR012)
+### Explicit instance data (GR012)
 
 Enable Ruff `SLF001` alongside GR012. Gruff flags raw public receiver stores;
 Ruff flags outside callers accessing the underscore-prefixed backing field,
 including same-module access to instances of non-public classes. Internal
-state needs no property until outside callers need access. SLF001 retains
+state needs no property until outside callers need access. Prefer dataclass
+fields and a generated constructor for data carriers; properties serve behavior
+and access control. Explicit writes in dataclass methods still require a setter
+or suppression. SLF001 retains
 its own exceptions; neither rule infers a complete runtime access boundary.
 
 ```toml

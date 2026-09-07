@@ -1,8 +1,8 @@
-# public-data-properties (GR012)
+# explicit-instance-data (GR012)
 
 ## What it does
 
-Flags each direct store to a public attribute of an instance method's first positional parameter, unless that class declares a setter for the same name. The finding points at the attribute name, with the diagnostic `Public instance attribute <name> requires a property setter for writes; use underscore-prefixed storage for internal state`. Public means the attribute name does not start with `_`; a class name starting with `_` does not exempt its fields.
+Flags each direct store to a public attribute of an instance method's first positional parameter, unless that class declares a setter for the same name. The finding points at the attribute name, with the diagnostic ``Instance data field `<name>` is implicit; declare it as a dataclass field or expose it through a property.``. Public means the attribute name does not start with `_`; a class name starting with `_` does not exempt its fields.
 
 The rule covers ordinary, annotated (including annotation-only), augmented, chained, and unpacking assignments, as well as `for` and `with` targets, anywhere in a method's control flow, including outside `__init__`. A receiver may have any name and may be positional-only. Reads, method calls, item mutation, and deletion are not stores of an attribute and are outside this rule.
 
@@ -22,7 +22,9 @@ The rule is opt-in, supports normal selection and suppression, and has no autofi
 
 ## Why
 
-A raw public field makes storage an implicit data interface. Internal state only needs an underscore-prefixed name; intentional public access deserves a property, and intentional public writes deserve a setter. Public methods remain methods.
+A raw public field makes storage an implicit data interface. For a data-carrier class, prefer a dataclass: declared fields and a generated constructor make its data explicit without adding properties for each field. Small predicates do not prevent a class from being a data carrier. When behavior, validation, or read/write control matters, use underscore-prefixed backing storage and properties; a setter is needed only for intentional public writes. State used only inside the class needs an underscore-prefixed name without a property. Public methods remain methods.
+
+This policy applies independently of class or module naming: consumers determine the effective interface, and a non-public helper can later become part of one. The rule does not classify classes by their number of fields or amount of behavior.
 
 Pair GR012 with Ruff's [private-member-access (SLF001)](https://docs.astral.sh/ruff/rules/private-member-access/), derived from flake8-self. It flags external backing-field access such as `logger._error_message`, including when a private class and its caller share a module. Gruff deliberately leaves this existing rule to Ruff. SLF001 has its own documented exceptions and is a syntactic companion, not complete access control. Pylint also provides [protected-access (W0212)](https://pylint.pycqa.org/en/latest/user_guide/messages/warning/protected-access.html). Neither requires public storage to become a property; Ruff's `RUF012` addresses mutable class defaults and `PLR0206` addresses property parameters instead.
 
@@ -34,7 +36,20 @@ class _Result:
         self.error_message: str | None = None
 ```
 
-For state used only by the class, rename it to `_error_message`. If callers need to read it, expose that state explicitly:
+For a data carrier, declare the field and let the dataclass generate the constructor:
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass
+class _Result:
+    error_message: str | None = None
+```
+
+Adding `@dataclass` while keeping a handwritten constructor with `self.error_message = ...` does not repair the finding. Explicit receiver stores in methods, including `__post_init__`, remain checked even when they target declared dataclass fields; suppress those writes when the schema requires them. Class-body declarations and generated constructors are outside the source shape, not a blanket exemption for decorated classes.
+
+For state used only by the class, use `_error_message`. When read/write control or behavior matters, expose private backing storage through a property:
 
 ```python
 class _Result:
@@ -69,4 +84,4 @@ class DownloadError(Exception):
         self.message = message  # noqa: GR012 -- downstream clients require this field
 ```
 
-For a multiline target, put the suppression on the line containing the attribute name. A per-file ignore can cover files consisting entirely of framework data models. Suppression records a deliberate contract; blindly renaming a field can break its callers.
+For a multiline target, put the suppression on the line containing the attribute name. A per-file ignore can cover files consisting entirely of framework data models. Exclude generated or vendored output in the consuming project, while keeping project-owned generators subject to the rule. Suppression records a deliberate contract; blindly renaming a field can break its callers.

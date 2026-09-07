@@ -64,7 +64,7 @@ The first release tests eleven theses: inputs are easier to trace when definitio
 | GR009 | [`no-guarded-tails`](rules/no-guarded-tails.md) | Trailing conditions invert into guards instead of nesting the rest of the body. |
 | GR010 | [`positive-branch-conditions`](rules/positive-branch-conditions.md) | Branch conditions state the positive form instead of negating around an `else`. |
 | GR011 | [`no-single-consumer-module-bindings`](rules/no-single-consumer-module-bindings.md) | Non-public module bindings live in the one definition that reads them. |
-| GR012 | [`public-data-properties`](rules/public-data-properties.md) | Public instance data uses explicit properties with underscore-prefixed storage. |
+| GR012 | [`explicit-instance-data`](rules/explicit-instance-data.md) | Public instance data is explicit through dataclass fields or properties. |
 
 Each page above is the rule doc: what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
 

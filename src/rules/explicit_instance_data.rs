@@ -12,9 +12,9 @@ use ruff_text_size::Ranged;
 use super::Diagnostic;
 
 pub(crate) const CODE: &str = "GR012";
-pub(crate) const NAME: &str = "public-data-properties";
+pub(crate) const NAME: &str = "explicit-instance-data";
 pub(crate) const SUMMARY: &str =
-    "Public instance data uses explicit properties with underscore-prefixed storage.";
+    "Public instance data is explicit through dataclass fields or properties.";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     let mut visitor = ClassVisitor {
@@ -136,7 +136,7 @@ impl<'a> Visitor<'a> for AttributeVisitor<'a, '_> {
         {
             self.diagnostics.push(Diagnostic {
                 message: format!(
-                    "Public instance attribute `{}` requires a property setter for writes; use underscore-prefixed storage for internal state",
+                    "Instance data field `{}` is implicit; declare it as a dataclass field or expose it through a property.",
                     attribute.attr
                 ),
                 range: attribute.attr.range(),
