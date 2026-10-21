@@ -1421,6 +1421,8 @@ mod tests {
             "def _load(mode=\"r\"):\n    ...\n_load()\ndef run(name):\n    return run.__globals__[name](\"w\")\n",
             "def __load(mode=\"r\"):\n    ...\nclass Service:\n    def run(self):\n        return __load(\"w\")\n",
             "class Service:\n    def _Service__load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._Service__load(), self.__load(\"w\")\n",
+            "import inspect\ndef _load(mode=\"r\"):\n    ...\n_load()\ndef run(name):\n    return inspect.currentframe().f_globals[name](\"w\")\n",
+            "class Service:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(\"w\")\n    _Service__load = lambda self, mode: mode\n",
             "lookup = getattr\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), self.__getattribute__(\"_lo\" + suffix)(\"w\")\n",
             "import operator\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), operator.attrgetter(\"service._load\")(self)(\"w\")\n",

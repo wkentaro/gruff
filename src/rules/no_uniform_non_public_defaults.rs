@@ -72,8 +72,16 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
                     candidate.key(),
                     Usage {
                         // A class name bound twice, such as by a parameter, may name another
-                        // object, so calls through it cannot be tied to the method.
-                        is_opaque: owner.is_some_and(|owner| bindings.counts[owner] != 1),
+                        // object, so calls through it cannot be tied to the method. A `__name`
+                        // method is stored as `_Class__name`, which a binding under that spelling
+                        // replaces.
+                        is_opaque: owner.is_some_and(|owner| {
+                            let name = candidate.definition.name.as_str();
+                            let mangled = format!("_{}{name}", owner.trim_start_matches('_'));
+                            bindings.counts[owner] != 1
+                                || (name.starts_with("__")
+                                    && bindings.counts.contains_key(mangled.as_str()))
+                        }),
                         // Only an instance method's receiver comes from the instance, so only its
                         // call through the class passes the receiver as the first argument.
                         takes_instance: candidate.is_method
@@ -417,7 +425,13 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
                     Expr::Attribute(attribute)
                         if matches!(
                             attribute.attr.as_str(),
-                            "__dict__" | "__getattribute__" | "__globals__" | "__builtins__"
+                            "__dict__"
+                                | "__getattribute__"
+                                | "__globals__"
+                                | "__builtins__"
+                                | "f_globals"
+                                | "f_locals"
+                                | "f_builtins"
                         ) || LOOKUP_FUNCTIONS.contains(&attribute.attr.as_str()) =>
                     {
                         self.has_dynamic_lookup = true;
