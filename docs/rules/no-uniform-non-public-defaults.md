@@ -20,6 +20,8 @@ The rule reads only the definition's own module, so it skips a definition when i
 
 It skips the whole module when a name built at runtime may reach a definition: `getattr`, `hasattr`, `setattr`, `delattr`, `attrgetter`, or `methodcaller` with a name that is not a string literal, any call to `eval`, `exec`, `globals`, `locals`, `vars`, or `__getattribute__`, any `__dict__`, `__globals__`, `__builtins__`, `f_globals`, `f_locals`, or `f_builtins` access, or any of these functions referenced or imported under another name.
 
+Like type checkers such as pyright and mypy, the rule assumes `self` in a method is an instance of the method's class and `cls` in a classmethod is that class. A method called unbound with an unrelated object, as in `Service.roll(Random())`, breaks this assumption, and the rule may then attribute a call to the wrong method.
+
 An ordinary name inside a non-public class, module, or package is outside the rule, because other modules may call it. Its default can hold a value that several modules share.
 
 ## Why
