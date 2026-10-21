@@ -24,9 +24,9 @@ _Avoid_: Exported definition, API definition
 A policy requiring every non-receiver, non-variadic input to a module-level function or method to be positional-only or keyword-only, so its calling convention is locally declared and runtime-enforced.
 _Avoid_: Kwargs-only definitions, named inputs
 
-**Required non-public inputs**:
-A policy requiring every non-receiver, non-variadic input to a non-public definition to have no default, so callers supply each value.
-_Avoid_: Required private inputs, no non-public defaults, explicit non-public inputs
+**Uniform non-public default**:
+A default on a definition whose own name is non-public that every call in its module passes, or that no call in its module passes.
+_Avoid_: Required non-public inputs, unvaried default, unused default
 
 **Package dunder all**:
 A policy requiring every successfully completing package-initializer path with a binding whose name does not start with an underscore to finish with `__all__` bound.

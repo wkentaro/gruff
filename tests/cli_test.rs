@@ -149,8 +149,8 @@ fn checks_config_suppression_json_and_exit_status() {
 }
 
 #[test]
-fn checks_required_non_public_inputs_selection_and_suppression() {
-    let directory = create_temp_directory("required-non-public-inputs");
+fn checks_no_uniform_non_public_defaults_selection_and_suppression() {
+    let directory = create_temp_directory("no-uniform-non-public-defaults");
     fs::write(
         directory.join("pyproject.toml"),
         "[tool.gruff.lint]\nselect = [\"GR002\"]\n",
@@ -158,12 +158,12 @@ fn checks_required_non_public_inputs_selection_and_suppression() {
     .expect("test configuration should be written");
     fs::write(
         directory.join("finding.py"),
-        "def _render(*, path=None):\n    ...\n",
+        "def _render(*, path=None):\n    ...\n\n_render()\n",
     )
     .expect("finding source should be written");
     fs::write(
         directory.join("suppressed.pyi"),
-        "def _load(*, path=None): ...  # noqa: GR002\n",
+        "def _load(*, path=None): ...  # noqa: GR002\n\n_load()\n",
     )
     .expect("suppressed source should be written");
 
@@ -178,10 +178,10 @@ fn checks_required_non_public_inputs_selection_and_suppression() {
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
     assert_eq!(findings.as_array().unwrap().len(), 1);
     assert_eq!(findings[0]["code"], "GR002");
-    assert_eq!(findings[0]["name"], "required-non-public-inputs");
+    assert_eq!(findings[0]["name"], "no-uniform-non-public-defaults");
     assert_eq!(
         findings[0]["message"],
-        "Non-public input `path` must be required"
+        "No call passes `path`; remove the input and use its default inside `_render`"
     );
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
@@ -1495,7 +1495,7 @@ fn splits_input_convention_rules_under_prefix_selection() {
     .expect("test configuration should be written");
     fs::write(
         directory.join("definitions.py"),
-        "def public(path):\n    ...\n\ndef _non_public(path=None):  # noqa: GR001\n    ...\n\ndef public_suppressed(path):  # noqa: GR005\n    ...\n\ndef _non_public_suppressed(path):  # noqa: GR002\n    ...\n",
+        "def public(path):\n    ...\n\ndef _non_public(path=None):  # noqa: GR001\n    ...\n\ndef public_suppressed(path):  # noqa: GR005\n    ...\n\ndef _non_public_suppressed(path):  # noqa: GR002\n    ...\n\n_non_public()\n",
     )
     .expect("test source should be written");
 
@@ -1612,7 +1612,6 @@ fn treats_definitions_in_non_public_scopes_as_non_public() {
         ("pkg/_helpers.py", "GR001", 5),
         ("pkg/_helpers.py", "GR005", 2),
         ("pkg/_impl/core.py", "GR001", 1),
-        ("pkg/_impl/core.py", "GR002", 1),
         ("pkg/_impl/core.py", "GR006", 2),
         ("pkg/api.py", "GR001", 5),
         ("pkg/api.py", "GR005", 1),
@@ -1635,7 +1634,7 @@ fn treats_definitions_in_non_public_scopes_as_non_public() {
         .iter()
         .map(|finding| finding["code"].as_str().unwrap())
         .collect();
-    assert_eq!(codes, ["GR001", "GR002", "GR006"]);
+    assert_eq!(codes, ["GR001", "GR006"]);
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }

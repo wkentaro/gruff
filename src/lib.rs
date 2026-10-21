@@ -63,11 +63,11 @@ const RULES: &[Rule] = &[
         check: RuleCheck::Ast(rules::explicit_non_public_input_conventions::check),
     },
     Rule {
-        code: rules::required_non_public_inputs::CODE,
-        name: rules::required_non_public_inputs::NAME,
-        summary: rules::required_non_public_inputs::SUMMARY,
-        document: include_str!("../docs/rules/required-non-public-inputs.md"),
-        check: RuleCheck::Ast(rules::required_non_public_inputs::check),
+        code: rules::no_uniform_non_public_defaults::CODE,
+        name: rules::no_uniform_non_public_defaults::NAME,
+        summary: rules::no_uniform_non_public_defaults::SUMMARY,
+        document: include_str!("../docs/rules/no-uniform-non-public-defaults.md"),
+        check: RuleCheck::Ast(rules::no_uniform_non_public_defaults::check),
     },
     Rule {
         code: rules::package_dunder_all::CODE,
@@ -1055,7 +1055,7 @@ mod tests {
     fn reports_each_non_public_input() {
         let findings = check_all_rules(
             Path::new("test.py"),
-            "def _resize(data, width=512, *, mode=\"fit\"):\n    ...\n",
+            "def _resize(data, width=512, *, mode=\"fit\"):\n    ...\n_resize(image)\n",
         );
 
         assert_eq!(findings.len(), 4);
@@ -1071,17 +1071,17 @@ mod tests {
         assert_eq!(findings[2].code, "GR002");
         assert_eq!(
             findings[2].message,
-            "Non-public input `width` must be required"
+            "No call passes `width`; remove the input and use its default inside `_resize`"
         );
         assert_eq!(
             findings[3].message,
-            "Non-public input `mode` must be required"
+            "No call passes `mode`; remove the input and use its default inside `_resize`"
         );
     }
 
     #[test]
     fn reports_both_rules_for_a_defaulted_positional_input() {
-        let findings = check_all_rules(Path::new("test.py"), "def _f(width=512):\n    ...\n");
+        let findings = check_all_rules(Path::new("test.py"), "def _f(width=512):\n    ...\n_f()\n");
 
         assert_eq!(findings.len(), 2);
         assert_eq!(findings[0].code, "GR001");
@@ -1238,12 +1238,12 @@ mod tests {
     }
 
     #[test]
-    fn keeps_required_non_public_inputs_non_public_only() {
+    fn keeps_no_uniform_non_public_defaults_non_public_only() {
         let outside_scope = [
-            "def load(path=None):\n    ...\n",
-            "def load_(path=None):\n    ...\n",
-            "def _missing_(path=None):\n    ...\n",
-            "def __load__(path=None):\n    ...\n",
+            "def load(path=None):\n    ...\nload()\n",
+            "def load_(path=None):\n    ...\nload_()\n",
+            "def _missing_(path=None):\n    ...\n_missing_()\n",
+            "def __load__(path=None):\n    ...\n__load__()\n",
         ];
         for source in outside_scope {
             assert!(
@@ -1253,8 +1253,8 @@ mod tests {
         }
 
         for source in [
-            "def _load(path=None):\n    ...\n",
-            "def __load(path=None):\n    ...\n",
+            "def _load(path=None):\n    ...\n_load()\n",
+            "def __load(path=None):\n    ...\n__load()\n",
         ] {
             assert_eq!(
                 check_rule(source, "GR002").len(),
@@ -1284,9 +1284,9 @@ mod tests {
         }
 
         let required_violations = [
-            "def _load(path=None):\n    ...\n",
-            "def _load(*, path=None):\n    ...\n",
-            "class Service:\n    def _load(self, *, path=None):\n        ...\n",
+            "def _load(path=None):\n    ...\n_load()\n",
+            "def _load(*, path=None):\n    ...\n_load()\n",
+            "class Service:\n    def _load(self, *, path=None):\n        ...\n    def run(self):\n        self._load()\n",
         ];
         for source in required_violations {
             assert_eq!(
@@ -1320,18 +1320,82 @@ mod tests {
     }
 
     #[test]
-    fn keeps_required_non_public_inputs_independent_for_positional_only_inputs() {
-        let findings = check_all_rules(Path::new("test.py"), "def _load(path=None, /):\n    ...\n");
+    fn keeps_no_uniform_non_public_defaults_independent_for_positional_only_inputs() {
+        let findings = check_all_rules(
+            Path::new("test.py"),
+            "def _load(path=None, /):\n    ...\n_load()\n",
+        );
 
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].code, "GR002");
     }
 
     #[test]
+    fn reports_only_defaults_every_call_treats_alike() {
+        let findings = check_rule(
+            "def _load(path, mode=\"r\", size=0):\n    ...\n_load(a, \"w\")\n_load(b, mode=\"w\")\n",
+            "GR002",
+        );
+        assert_eq!(findings.len(), 2);
+        assert_eq!(
+            findings[0].message,
+            "Every call passes `mode`; remove its default"
+        );
+        assert_eq!(
+            findings[1].message,
+            "No call passes `size`; remove the input and use its default inside `_load`"
+        );
+
+        for source in [
+            "class Service:\n    @staticmethod\n    def _load(mode=None):\n        ...\nService._load()\n",
+            "class Service:\n    @classmethod\n    def _load(cls, mode=None):\n        ...\nService._load()\n",
+        ] {
+            assert_eq!(
+                check_rule(source, "GR002").len(),
+                1,
+                "expected GR002 for {source}"
+            );
+        }
+
+        let allowed = [
+            "def _load(mode=None):\n    ...\n",
+            "def _load(mode=None):\n    ...\n_load()\n_load(1)\n",
+            "def _load(*, mode=None):\n    ...\n_load()\n_load(mode=1)\n",
+            "def _load(mode=None):\n    ...\n_load()\nhandler = _load\n",
+            "def _load(mode=None):\n    ...\n_load()\n_load(*args)\n",
+            "def _load(mode=None):\n    ...\n_load()\n_load(**options)\n",
+            "def _load(mode=None):\n    ...\n_load()\nexport(_load)\n",
+            "@cache\ndef _load(mode=None):\n    ...\n_load()\n",
+            "if X:\n    pass\ndef _load(mode=None):\n    ...\ndef _load(mode=None):\n    ...\n_load()\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\n    def run(self):\n        Service._load(self)\n",
+            "if X:\n    class Service:\n        def _load(self, mode=None):\n            ...\n        def run(self):\n            Service._load(self)\n",
+            "class Outer:\n    class Service:\n        def _load(self, mode=None):\n            ...\n        def run(self):\n            Outer.Service._load(self)\n",
+            "def _load(mode=None):\n    ...\ndef run():\n    def _load():\n        ...\n    _load()\n",
+            "def _load(mode=None):\n    ...\ndef run(_load):\n    _load()\n",
+            "from other import _load\ndef _load(mode=None):\n    ...\n_load()\n",
+            "class Service:\n    def __load(self, mode=None):\n        ...\n    def run(self):\n        self.__load()\nService()._Service__load(1)\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\n    @classmethod\n    def make(cls):\n        cls._load(cls())\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\nclass Other:\n    _load = staticmethod(print)\nOther()._load()\n",
+            "import sys\ndef _load(mode=None):\n    ...\n_load()\nsys.modules[__name__]._load(1)\n",
+            "from random import Random\nclass Service:\n    def _pick(self, n=10):\n        ...\nRandom()._pick(5)\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\nAlias = Service\nAlias._load(Service())\n",
+            "def _load(mode=None):\n    ...\ndef run(event):\n    match event:\n        case {\"callback\": _load}:\n            _load()\n",
+            "def _load(mode=None):\n    ...\ntry:\n    pass\nexcept Exception as _load:\n    _load()\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\n    def run(self):\n        self._load()\n        callback(self._load)\n",
+        ];
+        for source in allowed {
+            assert!(
+                check_rule(source, "GR002").is_empty(),
+                "unexpected GR002 for {source}"
+            );
+        }
+    }
+
+    #[test]
     fn suppresses_each_rule_independently() {
         let findings = check_all_rules(
             Path::new("test.py"),
-            "def _load(\\\n    path=None):  # noqa: GR001 -- positional protocol\n    ...\n",
+            "def _load(\\\n    path=None):  # noqa: GR001 -- positional protocol\n    ...\n_load()\n",
         );
 
         assert_eq!(findings.len(), 1);

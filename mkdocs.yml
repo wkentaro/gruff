@@ -43,7 +43,7 @@ nav:
   - Configuration: configuration.md
   - Rules:
       - rules/explicit-non-public-input-conventions.md
-      - rules/required-non-public-inputs.md
+      - rules/no-uniform-non-public-defaults.md
       - rules/package-dunder-all.md
       - rules/final-constants.md
       - rules/explicit-public-input-conventions.md
