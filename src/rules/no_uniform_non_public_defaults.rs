@@ -30,6 +30,18 @@ pub(crate) const NAME: &str = "no-uniform-non-public-defaults";
 pub(crate) const SUMMARY: &str =
     "Some calls in its module pass a module-private default and others omit it.";
 
+const LOOKUP_FUNCTIONS: [&str; 9] = [
+    "getattr",
+    "hasattr",
+    "setattr",
+    "delattr",
+    "attrgetter",
+    "methodcaller",
+    "globals",
+    "locals",
+    "vars",
+];
+
 pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     let mut bindings = BindingCollector::default();
     bindings.visit_body(statements);
@@ -221,9 +233,12 @@ impl<'a> CallWalker<'a> {
         }
     }
 
+    // `attrgetter("service._load")` walks a dotted path, so each component may name a candidate.
     fn mark_string_reference(&mut self, value: &'a str) {
-        self.mark_unresolved_attribute(value);
-        self.mark_bare_method_reference(value);
+        for component in value.split('.') {
+            self.mark_unresolved_attribute(component);
+            self.mark_bare_method_reference(component);
+        }
     }
 
     fn is_dynamic_lookup(call: &ExprCall) -> bool {
@@ -234,7 +249,7 @@ impl<'a> CallWalker<'a> {
         };
         let args = &call.arguments.args;
         let names: Vec<Option<&Expr>> = match callee {
-            "globals" | "locals" | "vars" => return true,
+            "globals" | "locals" | "vars" | "__getattribute__" | "__getattr__" => return true,
             "getattr" | "hasattr" | "setattr" | "delattr" => vec![args.get(1)],
             "methodcaller" => vec![args.first()],
             "attrgetter" => args.iter().map(Some).collect(),
@@ -366,7 +381,14 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
             }
             Expr::Name(_) | Expr::Attribute(_) => {
                 match expression {
-                    Expr::Attribute(attribute) if attribute.attr.as_str() == "__dict__" => {
+                    Expr::Attribute(attribute)
+                        if matches!(attribute.attr.as_str(), "__dict__" | "__getattribute__") =>
+                    {
+                        self.has_dynamic_lookup = true;
+                    }
+                    // A lookup function that escapes, as in `lookup = getattr`, is no longer
+                    // recognizable at its calls.
+                    Expr::Name(name) if LOOKUP_FUNCTIONS.contains(&name.id.as_str()) => {
                         self.has_dynamic_lookup = true;
                     }
                     Expr::Attribute(attribute) => {
@@ -393,6 +415,15 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
                 self.scopes.pop();
             }
             _ => walk_expr(self, expression),
+        }
+    }
+
+    // An imported lookup function under another name, as in `from builtins import getattr as
+    // lookup`, is no longer recognizable at its calls.
+    fn visit_alias(&mut self, alias: &'a Alias) {
+        let imported = alias.name.rsplit('.').next().unwrap_or_default();
+        if alias.asname.is_some() && LOOKUP_FUNCTIONS.contains(&imported) {
+            self.has_dynamic_lookup = true;
         }
     }
 
