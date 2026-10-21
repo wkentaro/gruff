@@ -129,8 +129,40 @@ struct PassedInputs {
 
 struct CallWalker<'a> {
     usages: HashMap<(&'a str, bool), Usage<'a>>,
-    // The enclosing classes and functions, innermost last, with `None` for a function.
-    scopes: Vec<Option<&'a str>>,
+    // The enclosing classes and functions, innermost last.
+    scopes: Vec<Scope<'a>>,
+}
+
+enum Scope<'a> {
+    Class(&'a str),
+    // The receiver name, `self` or `cls`, that a method directly inside a class binds to its
+    // instance or class and never rebinds.
+    Function(Option<&'a str>),
+}
+
+// `self` names the instance only in an undecorated method and `cls` the class only in a
+// classmethod, and only while the method's first input keeps that name and its body never rebinds
+// it. A static method, a renamed receiver, or `self = other` leaves the name unresolved.
+fn trusted_receiver(function: &StmtFunctionDef) -> Option<&'static str> {
+    let receiver = match function.decorator_list.as_slice() {
+        [] => "self",
+        [decorator] if matches!(&decorator.expression, Expr::Name(name) if name.id == "classmethod") => {
+            "cls"
+        }
+        _ => return None,
+    };
+    let parameters = &function.parameters;
+    let first = parameters
+        .posonlyargs
+        .iter()
+        .chain(&parameters.args)
+        .next()?;
+    if first.name().as_str() != receiver {
+        return None;
+    }
+    let mut bindings = BindingCollector::default();
+    bindings.visit_body(&function.body);
+    (!bindings.counts.contains_key(receiver)).then_some(receiver)
 }
 
 impl<'a> CallWalker<'a> {
@@ -167,17 +199,20 @@ impl<'a> CallWalker<'a> {
         // defines it, or through that class's name; any other receiver may hold an unrelated object
         // with a method of the same name. Through `cls` or the class, an instance method takes the
         // receiver as its first argument, which shifts every positional input by one.
-        // `self` and `cls` name the receiver only in a function directly inside its class; a nested
-        // function or lambda may bind them to anything.
-        let method_class = match self.scopes.as_slice() {
-            [.., class @ Some(_), None] => *class,
+        // A nested function or lambda may bind `self` and `cls` to anything, so only the innermost
+        // method's own receiver counts.
+        let method_receiver = match self.scopes.as_slice() {
+            [.., Scope::Class(class), Scope::Function(Some(receiver))] => Some((*class, *receiver)),
             _ => None,
         };
         let receiver = match &*call.func {
             Expr::Attribute(attribute) => Some(match &*attribute.value {
-                Expr::Name(name) if name.id == "self" => (method_class, false),
-                Expr::Name(name) if name.id == "cls" => (method_class, true),
-                Expr::Name(name) => (Some(name.id.as_str()), true),
+                Expr::Name(name) => match method_receiver {
+                    Some((class, receiver)) if name.id == receiver => {
+                        (Some(class), receiver == "cls")
+                    }
+                    _ => (Some(name.id.as_str()), true),
+                },
                 _ => (None, false),
             }),
             _ => None,
@@ -217,8 +252,12 @@ impl<'a> CallWalker<'a> {
 impl<'a> Visitor<'a> for CallWalker<'a> {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
         let scope = match statement {
-            Stmt::ClassDef(class) => Some(class.name.as_str()),
-            Stmt::FunctionDef(_) => None,
+            Stmt::ClassDef(class) => Scope::Class(class.name.as_str()),
+            Stmt::FunctionDef(function) => Scope::Function(
+                matches!(self.scopes.last(), Some(Scope::Class(_)))
+                    .then(|| trusted_receiver(function))
+                    .flatten(),
+            ),
             _ => return walk_stmt(self, statement),
         };
         self.scopes.push(scope);
@@ -249,7 +288,7 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
                 walk_expr(self, expression);
             }
             Expr::Lambda(_) => {
-                self.scopes.push(None);
+                self.scopes.push(Scope::Function(None));
                 walk_expr(self, expression);
                 self.scopes.pop();
             }
@@ -274,8 +313,10 @@ fn uniform_default_diagnostics(candidate: &Candidate, usage: &Usage<'_>) -> Vec<
                 .calls
                 .iter()
                 .filter(|call| {
+                    let accepts_keyword =
+                        input.is_positional_or_keyword || index >= positional_count;
                     (index < positional_count && index < call.positional_count)
-                        || call.keywords.contains(input.name)
+                        || (accepts_keyword && call.keywords.contains(input.name))
                 })
                 .count();
             let message = if passed_count == 0 {

@@ -9,7 +9,7 @@ The rule reads only the definition's own module, so it skips a definition when i
 - It has no calls in the module.
 - A reference other than a direct call exists, such as a callback or a `functools.partial` argument.
 - A call unpacks `*args` or `**kwargs`.
-- A method is called through anything other than `self` or `cls` inside its own class, or its class's name, as in `service._load()`.
+- A method is called through anything other than its class's name or the receiver of a method in that class, as in `service._load()`. The receiver is `self` in an undecorated method or `cls` in a classmethod, and only while the method never rebinds it.
 - An instance method is called through `cls` or its class, as in `Service._load(service)`.
 - A method with a double-underscore name is referenced by its mangled name, as in `service._Service__load()`.
 - A decorator other than `staticmethod` or `classmethod` wraps it.
