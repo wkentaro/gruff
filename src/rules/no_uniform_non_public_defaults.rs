@@ -30,7 +30,9 @@ pub(crate) const NAME: &str = "no-uniform-non-public-defaults";
 pub(crate) const SUMMARY: &str =
     "Some calls in its module pass a module-private default and others omit it.";
 
-const LOOKUP_FUNCTIONS: [&str; 9] = [
+const LOOKUP_FUNCTIONS: [&str; 11] = [
+    "eval",
+    "exec",
     "getattr",
     "hasattr",
     "setattr",
@@ -231,6 +233,26 @@ impl<'a> CallWalker<'a> {
         if let Some(usage) = self.usages.get_mut(&(name, true)) {
             usage.is_opaque = true;
         }
+        // Inside a class, Python mangles a bare `__name` to `_Class__name`, which may be a
+        // module-level function.
+        let class = self.scopes.iter().rev().find_map(|scope| match scope {
+            Scope::Class(class) => Some(class.trim_start_matches('_')),
+            Scope::Function(_) => None,
+        });
+        if let Some(class) = class
+            && name.starts_with("__")
+            && !name.ends_with("__")
+        {
+            for ((function, is_method), usage) in &mut self.usages {
+                let mangled = function
+                    .strip_prefix('_')
+                    .and_then(|rest| rest.strip_prefix(class))
+                    == Some(name);
+                if !*is_method && mangled {
+                    usage.is_opaque = true;
+                }
+            }
+        }
     }
 
     // `attrgetter("service._load")` walks a dotted path, so each component may name a candidate.
@@ -249,7 +271,10 @@ impl<'a> CallWalker<'a> {
         };
         let args = &call.arguments.args;
         let names: Vec<Option<&Expr>> = match callee {
-            "globals" | "locals" | "vars" | "__getattribute__" | "__getattr__" => return true,
+            "eval" | "exec" | "globals" | "locals" | "vars" | "__getattribute__"
+            | "__getattr__" => {
+                return true;
+            }
             "getattr" | "hasattr" | "setattr" | "delattr" => vec![args.get(1)],
             "methodcaller" => vec![args.first()],
             "attrgetter" => args.iter().map(Some).collect(),
