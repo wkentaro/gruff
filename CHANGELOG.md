@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.1.0 - 2026-10-21
+
+### Changed
+
+- **Breaking:** GR001, GR002, and GR006 treat a plain name inside a private class, module, or package as non-public, and GR005 no longer covers it. ([#90](https://github.com/wkentaro/gruff/pull/90))
+
 ## 0.0.10 - 2026-09-07
 
 No significant changes.
