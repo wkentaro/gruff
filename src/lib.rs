@@ -1378,6 +1378,7 @@ mod tests {
             "class Service:\n    def _load(self, mode=None):\n        ...\nclass Other:\n    _load = staticmethod(print)\nOther()._load()\n",
             "import sys\ndef _load(mode=None):\n    ...\n_load()\nsys.modules[__name__]._load(1)\n",
             "from random import Random\nclass Service:\n    def _pick(self, n=10):\n        ...\nRandom()._pick(5)\n",
+            "from random import Random\nclass Service:\n    def _pick(self, n=10):\n        ...\nclass Dice(Random):\n    def roll(self):\n        return self._pick(6)\n",
             "class Service:\n    def _load(self, mode=None):\n        ...\nAlias = Service\nAlias._load(Service())\n",
             "def _load(mode=None):\n    ...\ndef run(event):\n    match event:\n        case {\"callback\": _load}:\n            _load()\n",
             "def _load(mode=None):\n    ...\ntry:\n    pass\nexcept Exception as _load:\n    _load()\n",

@@ -47,12 +47,16 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
                         // call through the class passes the receiver as the first argument.
                         takes_instance: candidate.is_method
                             && candidate.definition.decorator_list.is_empty(),
+                        owner: bindings
+                            .method_owners
+                            .get(candidate.definition.name.as_str())
+                            .copied(),
                         ..Usage::default()
                     },
                 )
             })
             .collect(),
-        class_names: bindings.class_names,
+        class_stack: Vec::new(),
     };
     walker.visit_body(statements);
 
@@ -105,12 +109,13 @@ fn find_candidates<'a>(
 }
 
 #[derive(Default)]
-struct Usage {
+struct Usage<'a> {
     calls: Vec<PassedInputs>,
     // A reference that is not a plain call, such as a callback, a `functools.partial` argument, or
     // a call unpacking `*args` or `**kwargs`, may pass any input, so no call count can be trusted.
     is_opaque: bool,
     takes_instance: bool,
+    owner: Option<&'a str>,
 }
 
 struct PassedInputs {
@@ -118,19 +123,13 @@ struct PassedInputs {
     keywords: HashSet<String>,
 }
 
-enum Receiver {
-    Instance,
-    Class,
-    Unresolved,
-}
-
 struct CallWalker<'a> {
-    usages: HashMap<(&'a str, bool), Usage>,
-    class_names: HashSet<&'a str>,
+    usages: HashMap<(&'a str, bool), Usage<'a>>,
+    class_stack: Vec<&'a str>,
 }
 
 impl<'a> CallWalker<'a> {
-    fn usage_for(&mut self, reference: &'a Expr) -> Option<&mut Usage> {
+    fn usage_for(&mut self, reference: &'a Expr) -> Option<&mut Usage<'a>> {
         match reference {
             Expr::Name(name) => self.usages.get_mut(&(name.id.as_str(), false)),
             Expr::Attribute(attribute) => self.usages.get_mut(&(attribute.attr.as_str(), true)),
@@ -159,30 +158,25 @@ impl<'a> CallWalker<'a> {
         if let Expr::Attribute(attribute) = &*call.func {
             self.mark_unresolved_attribute(attribute.attr.as_str());
         }
-        // A method call is tied to the candidate only through `self`, `cls`, or a class named in the
-        // module; any other receiver may hold an unrelated object with a method of the same name.
-        // Through `cls` or a class, an instance method takes the receiver as its first argument,
-        // which shifts every positional input by one.
+        // A method call is tied to the candidate only through `self` or `cls` inside the class that
+        // defines it, or through that class's name; any other receiver may hold an unrelated object
+        // with a method of the same name. Through `cls` or the class, an instance method takes the
+        // receiver as its first argument, which shifts every positional input by one.
         let receiver = match &*call.func {
             Expr::Attribute(attribute) => Some(match &*attribute.value {
-                Expr::Name(name) if name.id == "self" => Receiver::Instance,
-                Expr::Name(name)
-                    if name.id == "cls" || self.class_names.contains(name.id.as_str()) =>
-                {
-                    Receiver::Class
-                }
-                _ => Receiver::Unresolved,
+                Expr::Name(name) if name.id == "self" => (self.class_stack.last().copied(), false),
+                Expr::Name(name) if name.id == "cls" => (self.class_stack.last().copied(), true),
+                Expr::Name(name) => (Some(name.id.as_str()), true),
+                _ => (None, false),
             }),
             _ => None,
         };
         let Some(usage) = self.usage_for(&call.func) else {
             return;
         };
-        let is_unbound = match receiver {
-            Some(Receiver::Unresolved) => true,
-            Some(Receiver::Class) => usage.takes_instance,
-            Some(Receiver::Instance) | None => false,
-        };
+        let is_unbound = receiver.is_some_and(|(class, is_through_class)| {
+            class.is_none() || class != usage.owner || (is_through_class && usage.takes_instance)
+        });
         let is_unpacked = call
             .arguments
             .args
@@ -210,6 +204,16 @@ impl<'a> CallWalker<'a> {
 }
 
 impl<'a> Visitor<'a> for CallWalker<'a> {
+    fn visit_stmt(&mut self, statement: &'a Stmt) {
+        if let Stmt::ClassDef(class) = statement {
+            self.class_stack.push(class.name.as_str());
+            walk_stmt(self, statement);
+            self.class_stack.pop();
+        } else {
+            walk_stmt(self, statement);
+        }
+    }
+
     fn visit_expr(&mut self, expression: &'a Expr) {
         match expression {
             Expr::Call(call) => {
@@ -237,7 +241,7 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
     }
 }
 
-fn uniform_default_diagnostics(candidate: &Candidate, usage: &Usage) -> Vec<Diagnostic> {
+fn uniform_default_diagnostics(candidate: &Candidate, usage: &Usage<'_>) -> Vec<Diagnostic> {
     if usage.is_opaque || usage.calls.is_empty() {
         return Vec::new();
     }
@@ -276,13 +280,12 @@ fn uniform_default_diagnostics(candidate: &Candidate, usage: &Usage) -> Vec<Diag
         .collect()
 }
 
-// A class may be defined under a branch or inside another class, and a call above its definition
-// may still name it, so every class in the module is collected before the calls are walked. A
-// nested definition, parameter, import, assignment, pattern capture, or exception name that reuses a candidate's name may take its
+// A call above a class may still name its methods, so each method's class is collected before the
+// calls are walked. A nested definition, parameter, import, assignment, pattern capture, or exception name that reuses a candidate's name may take its
 // calls, so those bindings are counted too.
 #[derive(Default)]
 struct BindingCollector<'a> {
-    class_names: HashSet<&'a str>,
+    method_owners: HashMap<&'a str, &'a str>,
     counts: HashMap<&'a str, usize>,
 }
 
@@ -296,7 +299,12 @@ impl<'a> Visitor<'a> for BindingCollector<'a> {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
         match statement {
             Stmt::ClassDef(class) => {
-                self.class_names.insert(class.name.as_str());
+                for method in &class.body {
+                    if let Stmt::FunctionDef(method) = method {
+                        self.method_owners
+                            .insert(method.name.as_str(), class.name.as_str());
+                    }
+                }
                 self.bind(class.name.as_str());
             }
             Stmt::FunctionDef(function) => self.bind(function.name.as_str()),
