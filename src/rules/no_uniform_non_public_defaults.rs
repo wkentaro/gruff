@@ -133,8 +133,8 @@ impl<'a> Candidate<'a> {
 
 // Only a definition whose own name is non-public has every caller in its module, so only its
 // calls can show how callers use a default. A definition whose name something else in the module
-// also binds, or that a decorator other than `staticmethod` or `classmethod` may rewrap, has calls
-// the walk cannot attribute, so it is left alone.
+// also binds, or that any decorator other than a single `staticmethod` or `classmethod` may rewrap,
+// has calls the walk cannot attribute, so it is left alone.
 fn find_candidates<'a>(
     path: &Path,
     statements: &'a [Stmt],
