@@ -7,7 +7,7 @@ Flags a default on a module-level function or method whose own name starts with 
 The rule reads only the definition's own module, so it skips a definition when it cannot see every use there:
 
 - It has no calls in the module.
-- A reference other than a direct call exists, such as a callback or a `functools.partial` argument.
+- A reference other than a direct call exists, such as a callback, a `functools.partial` argument, or a method named bare in its class body, as in `__call__ = _load`.
 - A call unpacks `*args` or `**kwargs`.
 - A method is called through anything other than its class's name or the receiver of a method in that class, as in `service._load()`. The receiver is `self` in an undecorated method or `cls` in a classmethod, and only while the method never rebinds it.
 - An instance method is called through `cls` or its class, as in `Service._load(service)`, or any method is called through a class that has a decorator.

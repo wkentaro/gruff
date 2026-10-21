@@ -198,9 +198,19 @@ impl<'a> CallWalker<'a> {
         }
     }
 
+    // Inside its class body a method is a plain name, such as in `__call__ = _load`, which the walk
+    // does not tie to an instance, so such a reference makes the method's calls untrusted.
+    fn mark_bare_method_reference(&mut self, name: &'a str) {
+        if let Some(usage) = self.usages.get_mut(&(name, true)) {
+            usage.is_opaque = true;
+        }
+    }
+
     fn record_call(&mut self, call: &'a ExprCall) {
-        if let Expr::Attribute(attribute) = &*call.func {
-            self.mark_unresolved_attribute(attribute.attr.as_str());
+        match &*call.func {
+            Expr::Attribute(attribute) => self.mark_unresolved_attribute(attribute.attr.as_str()),
+            Expr::Name(name) => self.mark_bare_method_reference(name.id.as_str()),
+            _ => {}
         }
         // A method call is tied to the candidate only through `self` or `cls` inside the class that
         // defines it, or through that class's name; any other receiver may hold an unrelated object
@@ -306,8 +316,12 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
                 self.visit_arguments(&call.arguments);
             }
             Expr::Name(_) | Expr::Attribute(_) => {
-                if let Expr::Attribute(attribute) = expression {
-                    self.mark_unresolved_attribute(attribute.attr.as_str());
+                match expression {
+                    Expr::Attribute(attribute) => {
+                        self.mark_unresolved_attribute(attribute.attr.as_str());
+                    }
+                    Expr::Name(name) => self.mark_bare_method_reference(name.id.as_str()),
+                    _ => {}
                 }
                 if let Some(usage) = self.usage_for(expression) {
                     usage.is_opaque = true;
@@ -449,6 +463,11 @@ impl<'a> Visitor<'a> for BindingCollector<'a> {
     }
 
     fn visit_alias(&mut self, alias: &'a Alias) {
-        self.bind(alias.asname.as_ref().unwrap_or(&alias.name).as_str());
+        // `import a.b` binds `a`.
+        let name = match &alias.asname {
+            Some(asname) => asname.as_str(),
+            None => alias.name.split('.').next().unwrap_or_default(),
+        };
+        self.bind(name);
     }
 }
