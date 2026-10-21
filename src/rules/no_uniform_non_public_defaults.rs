@@ -341,11 +341,8 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
             // A string naming a candidate may reach it through `getattr` or a namespace lookup.
             Expr::StringLiteral(string) => {
                 let value = string.value.to_str();
-                for key in [(value, false), (value, true)] {
-                    if let Some(usage) = self.usages.get_mut(&key) {
-                        usage.is_opaque = true;
-                    }
-                }
+                self.mark_unresolved_attribute(value);
+                self.mark_bare_method_reference(value);
             }
             Expr::Lambda(lambda) => {
                 if let Some(parameters) = &lambda.parameters {
