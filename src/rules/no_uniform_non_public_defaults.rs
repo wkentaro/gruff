@@ -234,7 +234,7 @@ impl<'a> CallWalker<'a> {
             usage.is_opaque = true;
         }
         // Inside a class, Python mangles a bare `__name` to `_Class__name`, which may be a
-        // module-level function.
+        // module-level function, and the source spelling then names neither for certain.
         let class = self.scopes.iter().rev().find_map(|scope| match scope {
             Scope::Class(class) => Some(class.trim_start_matches('_')),
             Scope::Function(_) => None,
@@ -248,7 +248,7 @@ impl<'a> CallWalker<'a> {
                     .strip_prefix('_')
                     .and_then(|rest| rest.strip_prefix(class))
                     == Some(name);
-                if !*is_method && mangled {
+                if !*is_method && (mangled || *function == name) {
                     usage.is_opaque = true;
                 }
             }
@@ -407,8 +407,10 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
             Expr::Name(_) | Expr::Attribute(_) => {
                 match expression {
                     Expr::Attribute(attribute)
-                        if matches!(attribute.attr.as_str(), "__dict__" | "__getattribute__")
-                            || LOOKUP_FUNCTIONS.contains(&attribute.attr.as_str()) =>
+                        if matches!(
+                            attribute.attr.as_str(),
+                            "__dict__" | "__getattribute__" | "__globals__" | "__builtins__"
+                        ) || LOOKUP_FUNCTIONS.contains(&attribute.attr.as_str()) =>
                     {
                         self.has_dynamic_lookup = true;
                     }

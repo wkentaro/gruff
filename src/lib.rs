@@ -1417,6 +1417,8 @@ mod tests {
             "def _load(mode=\"r\"):\n    ...\n_load()\neval(\"_lo\" + \"ad('w')\")\n",
             "def _load(mode=\"r\"):\n    ...\n_load()\nexec(SOURCE)\n",
             "def _Service__load(mode=\"r\"):\n    ...\n_Service__load()\nclass Service:\n    def run(self):\n        return __load(\"w\")\n",
+            "def _load(mode=\"r\"):\n    ...\n_load()\ndef run(name):\n    return run.__globals__[name](\"w\")\n",
+            "def __load(mode=\"r\"):\n    ...\nclass Service:\n    def run(self):\n        return __load(\"w\")\n",
             "lookup = getattr\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), self.__getattribute__(\"_lo\" + suffix)(\"w\")\n",
             "import operator\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), operator.attrgetter(\"service._load\")(self)(\"w\")\n",
