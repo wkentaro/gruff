@@ -40,23 +40,27 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
         usages: candidates
             .iter()
             .map(|candidate| {
+                let owner = bindings
+                    .method_owners
+                    .get(candidate.definition.name.as_str())
+                    .copied();
                 (
                     candidate.key(),
                     Usage {
+                        // A class name bound twice, such as by a parameter, may name another
+                        // object, so calls through it cannot be tied to the method.
+                        is_opaque: owner.is_some_and(|owner| bindings.counts[owner] != 1),
                         // Only an instance method's receiver comes from the instance, so only its
                         // call through the class passes the receiver as the first argument.
                         takes_instance: candidate.is_method
                             && candidate.definition.decorator_list.is_empty(),
-                        owner: bindings
-                            .method_owners
-                            .get(candidate.definition.name.as_str())
-                            .copied(),
+                        owner,
                         ..Usage::default()
                     },
                 )
             })
             .collect(),
-        class_stack: Vec::new(),
+        scopes: Vec::new(),
     };
     walker.visit_body(statements);
 
@@ -125,7 +129,8 @@ struct PassedInputs {
 
 struct CallWalker<'a> {
     usages: HashMap<(&'a str, bool), Usage<'a>>,
-    class_stack: Vec<&'a str>,
+    // The enclosing classes and functions, innermost last, with `None` for a function.
+    scopes: Vec<Option<&'a str>>,
 }
 
 impl<'a> CallWalker<'a> {
@@ -162,10 +167,16 @@ impl<'a> CallWalker<'a> {
         // defines it, or through that class's name; any other receiver may hold an unrelated object
         // with a method of the same name. Through `cls` or the class, an instance method takes the
         // receiver as its first argument, which shifts every positional input by one.
+        // `self` and `cls` name the receiver only in a function directly inside its class; a nested
+        // function or lambda may bind them to anything.
+        let method_class = match self.scopes.as_slice() {
+            [.., class @ Some(_), None] => *class,
+            _ => None,
+        };
         let receiver = match &*call.func {
             Expr::Attribute(attribute) => Some(match &*attribute.value {
-                Expr::Name(name) if name.id == "self" => (self.class_stack.last().copied(), false),
-                Expr::Name(name) if name.id == "cls" => (self.class_stack.last().copied(), true),
+                Expr::Name(name) if name.id == "self" => (method_class, false),
+                Expr::Name(name) if name.id == "cls" => (method_class, true),
                 Expr::Name(name) => (Some(name.id.as_str()), true),
                 _ => (None, false),
             }),
@@ -205,13 +216,14 @@ impl<'a> CallWalker<'a> {
 
 impl<'a> Visitor<'a> for CallWalker<'a> {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
-        if let Stmt::ClassDef(class) = statement {
-            self.class_stack.push(class.name.as_str());
-            walk_stmt(self, statement);
-            self.class_stack.pop();
-        } else {
-            walk_stmt(self, statement);
-        }
+        let scope = match statement {
+            Stmt::ClassDef(class) => Some(class.name.as_str()),
+            Stmt::FunctionDef(_) => None,
+            _ => return walk_stmt(self, statement),
+        };
+        self.scopes.push(scope);
+        walk_stmt(self, statement);
+        self.scopes.pop();
     }
 
     fn visit_expr(&mut self, expression: &'a Expr) {
@@ -235,6 +247,11 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
                     usage.is_opaque = true;
                 }
                 walk_expr(self, expression);
+            }
+            Expr::Lambda(_) => {
+                self.scopes.push(None);
+                walk_expr(self, expression);
+                self.scopes.pop();
             }
             _ => walk_expr(self, expression),
         }
