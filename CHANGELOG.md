@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.1.1 - 2026-10-21
+
+### Changed
+
+- GR002 is now `no-uniform-non-public-defaults`: it flags a default on a `_`-named function only when every call in its module passes it or none does. ([#93](https://github.com/wkentaro/gruff/pull/93))
+
 ## 0.1.0 - 2026-10-21
 
 ### Changed
