@@ -145,12 +145,15 @@ fn find_candidates<'a>(
         .filter(|(definition, _)| {
             is_non_public_name(&definition.name)
                 && binding_counts.get(definition.name.as_str()) == Some(&1)
-                && definition.decorator_list.iter().all(|decorator| {
-                    matches!(
+                && match definition.decorator_list.as_slice() {
+                    [] => true,
+                    // Stacking the two changes how the method binds its receiver.
+                    [decorator] => matches!(
                         &decorator.expression,
                         Expr::Name(name) if name.id == "staticmethod" || name.id == "classmethod"
-                    )
-                })
+                    ),
+                    _ => false,
+                }
         })
         .map(|(definition, is_method)| Candidate {
             definition,

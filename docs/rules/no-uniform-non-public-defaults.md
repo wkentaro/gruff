@@ -13,7 +13,7 @@ The rule reads only the definition's own module, so it skips a definition when i
 - An instance method is called through `cls` or its class, as in `Service._load(service)`, or any method is called through a class that has a decorator, a base, or a metaclass.
 - A method with a double-underscore name is referenced by its mangled name, as in `service._Service__load()`.
 - A method input name starts with two underscores and does not end with two, so Python mangles it to `_Class__name`.
-- A decorator other than `staticmethod` or `classmethod` wraps it.
+- Any decorator other than a single `staticmethod` or `classmethod` wraps it.
 - An attribute has the function's name, as in `module._load()`.
 - Another definition, parameter, import, assignment, `match` capture, or `except` name in the module binds the same name.
 - The module has a wildcard import, rebinds `staticmethod` or `classmethod`, or defines `__getattribute__`.
