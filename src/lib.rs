@@ -1391,6 +1391,8 @@ mod tests {
             "class Service:\n    def _load(self, *, __mode_=\"r\"):\n        ...\n    def run(self):\n        return self._load(), self._load(_Service__mode_=\"w\")\n",
             "class Random:\n    @staticmethod\n    def _pick(instance, n=10):\n        ...\nfrom random import *\nRandom._pick(Random(), 6)\n",
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    __call__ = _load\n    def run(self):\n        return self._load()\n",
+            "from random import Random\nclass Replace(type):\n    def __new__(mcls, name, bases, namespace):\n        return Random\nclass Service(metaclass=Replace):\n    @staticmethod\n    def _pick(n=10):\n        ...\nService._pick(Service(), 6)\n",
+            "from builtins import classmethod as staticmethod\nclass Service:\n    @staticmethod\n    def _load(cls, mode=\"r\"):\n        ...\nService._load()\nService._load(\"w\")\n",
             "class Service:\n    @staticmethod\n    def _load(mode=\"r\"):\n        ...\n    DEFAULT = _load(\"w\")\n    def run(self):\n        return self._load()\n",
             "class collections:\n    @staticmethod\n    def _count(mapping, iterable=()):\n        ...\nimport collections.abc\ncollections._count({}, [1])\n",
             "from random import Random\ndef replace(cls):\n    return Random\n@replace\nclass Service:\n    @staticmethod\n    def _pick(n=10):\n        ...\nService._pick(Service(), 6)\n",

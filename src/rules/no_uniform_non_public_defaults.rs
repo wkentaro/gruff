@@ -31,8 +31,12 @@ pub(crate) const SUMMARY: &str =
 pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     let mut bindings = BindingCollector::default();
     bindings.visit_body(statements);
-    // A wildcard import may rebind any name, so no call can be tied to a definition.
-    if bindings.counts.contains_key("*") {
+    // A wildcard import may rebind any name, so no call can be tied to a definition, and a
+    // rebound `staticmethod` or `classmethod` hides how a method binds its receiver.
+    if ["*", "staticmethod", "classmethod"]
+        .iter()
+        .any(|name| bindings.counts.contains_key(name))
+    {
         return Vec::new();
     }
     let candidates = find_candidates(path, statements, &bindings.counts);
@@ -59,8 +63,8 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
                         takes_instance: candidate.is_method
                             && candidate.definition.decorator_list.is_empty(),
                         owner,
-                        is_owner_decorated: owner
-                            .is_some_and(|owner| bindings.decorated_classes.contains(owner)),
+                        is_owner_replaceable: owner
+                            .is_some_and(|owner| bindings.replaceable_classes.contains(owner)),
                         ..Usage::default()
                     },
                 )
@@ -126,7 +130,7 @@ struct Usage<'a> {
     is_opaque: bool,
     takes_instance: bool,
     owner: Option<&'a str>,
-    is_owner_decorated: bool,
+    is_owner_replaceable: bool,
 }
 
 struct PassedInputs {
@@ -240,7 +244,7 @@ impl<'a> CallWalker<'a> {
         let is_unbound = receiver.is_some_and(|(class, is_through_class)| {
             class.is_none()
                 || class != usage.owner
-                || (is_through_class && (usage.takes_instance || usage.is_owner_decorated))
+                || (is_through_class && (usage.takes_instance || usage.is_owner_replaceable))
         });
         let is_unpacked = call
             .arguments
@@ -395,8 +399,9 @@ fn uniform_default_diagnostics(candidate: &Candidate, usage: &Usage<'_>) -> Vec<
 #[derive(Default)]
 struct BindingCollector<'a> {
     method_owners: HashMap<&'a str, &'a str>,
-    // A class decorator may return another object, so the class's name may not name the class.
-    decorated_classes: HashSet<&'a str>,
+    // A class decorator or a metaclass, given directly or through a base, may return another
+    // object, so such a class's name may not name the class.
+    replaceable_classes: HashSet<&'a str>,
     counts: HashMap<&'a str, usize>,
 }
 
@@ -416,8 +421,8 @@ impl<'a> Visitor<'a> for BindingCollector<'a> {
                             .insert(method.name.as_str(), class.name.as_str());
                     }
                 }
-                if !class.decorator_list.is_empty() {
-                    self.decorated_classes.insert(class.name.as_str());
+                if !class.decorator_list.is_empty() || class.arguments.is_some() {
+                    self.replaceable_classes.insert(class.name.as_str());
                 }
                 self.bind(class.name.as_str());
             }
