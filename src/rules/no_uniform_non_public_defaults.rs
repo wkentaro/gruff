@@ -281,6 +281,9 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
                 for decorator in &class.decorator_list {
                     self.visit_decorator(decorator);
                 }
+                if let Some(type_params) = &class.type_params {
+                    self.visit_type_params(type_params);
+                }
                 if let Some(arguments) = &class.arguments {
                     self.visit_arguments(arguments);
                 }
@@ -289,6 +292,9 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
             Stmt::FunctionDef(function) => {
                 for decorator in &function.decorator_list {
                     self.visit_decorator(decorator);
+                }
+                if let Some(type_params) = &function.type_params {
+                    self.visit_type_params(type_params);
                 }
                 self.visit_parameters(&function.parameters);
                 if let Some(returns) = &function.returns {
@@ -331,6 +337,15 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
                     usage.is_opaque = true;
                 }
                 walk_expr(self, expression);
+            }
+            // A string naming a candidate may reach it through `getattr` or a namespace lookup.
+            Expr::StringLiteral(string) => {
+                let value = string.value.to_str();
+                for key in [(value, false), (value, true)] {
+                    if let Some(usage) = self.usages.get_mut(&key) {
+                        usage.is_opaque = true;
+                    }
+                }
             }
             Expr::Lambda(lambda) => {
                 if let Some(parameters) = &lambda.parameters {
