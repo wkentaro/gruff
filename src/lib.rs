@@ -63,11 +63,11 @@ const RULES: &[Rule] = &[
         check: RuleCheck::Ast(rules::explicit_non_public_input_conventions::check),
     },
     Rule {
-        code: rules::required_non_public_inputs::CODE,
-        name: rules::required_non_public_inputs::NAME,
-        summary: rules::required_non_public_inputs::SUMMARY,
-        document: include_str!("../docs/rules/required-non-public-inputs.md"),
-        check: RuleCheck::Ast(rules::required_non_public_inputs::check),
+        code: rules::no_uniform_non_public_defaults::CODE,
+        name: rules::no_uniform_non_public_defaults::NAME,
+        summary: rules::no_uniform_non_public_defaults::SUMMARY,
+        document: include_str!("../docs/rules/no-uniform-non-public-defaults.md"),
+        check: RuleCheck::Ast(rules::no_uniform_non_public_defaults::check),
     },
     Rule {
         code: rules::package_dunder_all::CODE,
@@ -1055,7 +1055,7 @@ mod tests {
     fn reports_each_non_public_input() {
         let findings = check_all_rules(
             Path::new("test.py"),
-            "def _resize(data, width=512, *, mode=\"fit\"):\n    ...\n",
+            "def _resize(data, width=512, *, mode=\"fit\"):\n    ...\n_resize(image)\n",
         );
 
         assert_eq!(findings.len(), 4);
@@ -1071,17 +1071,17 @@ mod tests {
         assert_eq!(findings[2].code, "GR002");
         assert_eq!(
             findings[2].message,
-            "Non-public input `width` must be required"
+            "No call passes `width`; remove the input and use its default inside `_resize`"
         );
         assert_eq!(
             findings[3].message,
-            "Non-public input `mode` must be required"
+            "No call passes `mode`; remove the input and use its default inside `_resize`"
         );
     }
 
     #[test]
     fn reports_both_rules_for_a_defaulted_positional_input() {
-        let findings = check_all_rules(Path::new("test.py"), "def _f(width=512):\n    ...\n");
+        let findings = check_all_rules(Path::new("test.py"), "def _f(width=512):\n    ...\n_f()\n");
 
         assert_eq!(findings.len(), 2);
         assert_eq!(findings[0].code, "GR001");
@@ -1238,12 +1238,12 @@ mod tests {
     }
 
     #[test]
-    fn keeps_required_non_public_inputs_non_public_only() {
+    fn keeps_no_uniform_non_public_defaults_non_public_only() {
         let outside_scope = [
-            "def load(path=None):\n    ...\n",
-            "def load_(path=None):\n    ...\n",
-            "def _missing_(path=None):\n    ...\n",
-            "def __load__(path=None):\n    ...\n",
+            "def load(path=None):\n    ...\nload()\n",
+            "def load_(path=None):\n    ...\nload_()\n",
+            "def _missing_(path=None):\n    ...\n_missing_()\n",
+            "def __load__(path=None):\n    ...\n__load__()\n",
         ];
         for source in outside_scope {
             assert!(
@@ -1253,8 +1253,8 @@ mod tests {
         }
 
         for source in [
-            "def _load(path=None):\n    ...\n",
-            "def __load(path=None):\n    ...\n",
+            "def _load(path=None):\n    ...\n_load()\n",
+            "def __load(path=None):\n    ...\n__load()\n",
         ] {
             assert_eq!(
                 check_rule(source, "GR002").len(),
@@ -1284,9 +1284,9 @@ mod tests {
         }
 
         let required_violations = [
-            "def _load(path=None):\n    ...\n",
-            "def _load(*, path=None):\n    ...\n",
-            "class Service:\n    def _load(self, *, path=None):\n        ...\n",
+            "def _load(path=None):\n    ...\n_load()\n",
+            "def _load(*, path=None):\n    ...\n_load()\n",
+            "class Service:\n    def _load(self, *, path=None):\n        ...\n    def run(self):\n        self._load()\n",
         ];
         for source in required_violations {
             assert_eq!(
@@ -1320,18 +1320,138 @@ mod tests {
     }
 
     #[test]
-    fn keeps_required_non_public_inputs_independent_for_positional_only_inputs() {
-        let findings = check_all_rules(Path::new("test.py"), "def _load(path=None, /):\n    ...\n");
+    fn keeps_no_uniform_non_public_defaults_independent_for_positional_only_inputs() {
+        let findings = check_all_rules(
+            Path::new("test.py"),
+            "def _load(path=None, /):\n    ...\n_load()\n",
+        );
 
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].code, "GR002");
     }
 
     #[test]
+    fn reports_only_defaults_every_call_treats_alike() {
+        let findings = check_rule(
+            "def _load(path, mode=\"r\", size=0):\n    ...\n_load(a, \"w\")\n_load(b, mode=\"w\")\n",
+            "GR002",
+        );
+        assert_eq!(findings.len(), 2);
+        assert_eq!(
+            findings[0].message,
+            "Every call passes `mode`; remove its default"
+        );
+        assert_eq!(
+            findings[1].message,
+            "No call passes `size`; remove the input and use its default inside `_load`"
+        );
+
+        for source in [
+            "class Service:\n    def __load(self, mode=None):\n        ...\n    def run(self):\n        self.__load()\n",
+            "class Service:\n    @staticmethod\n    def _load(mode=None):\n        ...\nService._load()\n",
+            "class Service:\n    @classmethod\n    def _load(cls, mode=None):\n        ...\nService._load()\n",
+        ] {
+            assert_eq!(
+                check_rule(source, "GR002").len(),
+                1,
+                "expected GR002 for {source}"
+            );
+        }
+
+        assert_eq!(
+            check_rule(
+                "def _load(mode=None):\n    ...\n_load()\ngetattr(obj, \"other\")\n",
+                "GR002"
+            )
+            .len(),
+            1
+        );
+
+        let allowed = [
+            "def _load(mode=None):\n    ...\n",
+            "def _load(mode=None):\n    ...\n_load()\n_load(1)\n",
+            "def _load(*, mode=None):\n    ...\n_load()\n_load(mode=1)\n",
+            "def _load(mode=None):\n    ...\n_load()\nhandler = _load\n",
+            "def _load(mode=None):\n    ...\n_load()\n_load(*args)\n",
+            "def _load(mode=None):\n    ...\n_load()\n_load(**options)\n",
+            "def _load(mode=None):\n    ...\n_load()\nexport(_load)\n",
+            "@cache\ndef _load(mode=None):\n    ...\n_load()\n",
+            "if X:\n    pass\ndef _load(mode=None):\n    ...\ndef _load(mode=None):\n    ...\n_load()\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\n    def run(self):\n        Service._load(self)\n",
+            "if X:\n    class Service:\n        def _load(self, mode=None):\n            ...\n        def run(self):\n            Service._load(self)\n",
+            "class Outer:\n    class Service:\n        def _load(self, mode=None):\n            ...\n        def run(self):\n            Outer.Service._load(self)\n",
+            "def _load(mode=None):\n    ...\ndef run():\n    def _load():\n        ...\n    _load()\n",
+            "def _load(mode=None):\n    ...\ndef run(_load):\n    _load()\n",
+            "from other import _load\ndef _load(mode=None):\n    ...\n_load()\n",
+            "class Service:\n    def __load(self, mode=None):\n        ...\n    def run(self):\n        self.__load()\nService()._Service__load(1)\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\n    @classmethod\n    def make(cls):\n        cls._load(cls())\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\nclass Other:\n    _load = staticmethod(print)\nOther()._load()\n",
+            "import sys\ndef _load(mode=None):\n    ...\n_load()\nsys.modules[__name__]._load(1)\n",
+            "from random import Random\nclass Service:\n    def _pick(self, n=10):\n        ...\nRandom()._pick(5)\n",
+            "from random import Random\nclass Service:\n    def _pick(self, n=10):\n        ...\nclass Dice(Random):\n    def roll(self):\n        return self._pick(6)\n",
+            "class Service:\n    @staticmethod\n    def _pick(n=10):\n        ...\ndef roll(Service):\n    return Service._pick(6)\n",
+            "class Service:\n    def _pick(self, n=10):\n        ...\n    def run(self, other):\n        def inner(self):\n            return self._pick(6)\n        return inner(other)\n",
+            "class Service:\n    def _pick(self, n=10):\n        ...\n    def run(self):\n        return (lambda self: self._pick(6))(1)\n",
+            "from random import Random\nclass Service:\n    def _pick(self, n=10):\n        ...\n    def roll(self):\n        self = Random()\n        return self._pick(6)\n",
+            "from random import Random\nclass Service:\n    def _pick(self, n=10):\n        ...\n    @staticmethod\n    def roll(self):\n        return self._pick(6)\n",
+            "class Service:\n    def _pick(self, n=10):\n        ...\n    def roll(this):\n        return this._pick(6)\n",
+            "def _load(mode=\"r\", /, **options):\n    ...\n_load(\"w\")\n_load(mode=\"a\")\n",
+            "class Service:\n    def _load(self, *, __mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), self._load(_Service__mode=\"w\")\n",
+            "from random import Random\nself = Random()\nclass Service:\n    def _pick(self, n=10):\n        ...\n    def roll(self, value=self._pick(6)):\n        ...\n",
+            "class Service:\n    def _load(self, *, __mode_=\"r\"):\n        ...\n    def run(self):\n        return self._load(), self._load(_Service__mode_=\"w\")\n",
+            "class Random:\n    @staticmethod\n    def _pick(instance, n=10):\n        ...\nfrom random import *\nRandom._pick(Random(), 6)\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    __call__ = _load\n    def run(self):\n        return self._load()\n",
+            "from random import Random\nclass Replace(type):\n    def __new__(mcls, name, bases, namespace):\n        return Random\nclass Service(metaclass=Replace):\n    @staticmethod\n    def _pick(n=10):\n        ...\nService._pick(Service(), 6)\n",
+            "from builtins import classmethod as staticmethod\nclass Service:\n    @staticmethod\n    def _load(cls, mode=\"r\"):\n        ...\nService._load()\nService._load(\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), getattr(self, \"_load\")(\"w\")\n",
+            "def _load(mode=\"r\"):\n    ...\ndef run[T: _load(\"w\")]():\n    pass\n_load()\n",
+            "class Service:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(), getattr(self, \"_Service__load\")(\"w\")\n",
+            "class Service__Impl:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(), getattr(self, \"_Service__Impl__load\")(\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), getattr(self, f\"_load\")(\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), getattr(self, \"_lo\" + suffix)(\"w\")\n",
+            "from operator import methodcaller\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, name):\n        return self._load(), methodcaller(name, \"w\")(self)\n",
+            "def _load(mode=\"r\"):\n    ...\n_load()\nglobals()[NAME](\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, key):\n        return self._load(), type(self).__dict__[key](self, \"w\")\n",
+            "from builtins import getattr as lookup\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
+            "import builtins\nlookup = builtins.getattr\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
+            "import operator\nlookup = operator.methodcaller\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, name):\n        return self._load(), lookup(name, \"w\")(self)\n",
+            "def _load(mode=\"r\"):\n    ...\n_load()\neval(\"_lo\" + \"ad('w')\")\n",
+            "def _load(mode=\"r\"):\n    ...\n_load()\nexec(SOURCE)\n",
+            "def _Service__load(mode=\"r\"):\n    ...\n_Service__load()\nclass Service:\n    def run(self):\n        return __load(\"w\")\n",
+            "def _load(mode=\"r\"):\n    ...\n_load()\ndef run(name):\n    return run.__globals__[name](\"w\")\n",
+            "def __load(mode=\"r\"):\n    ...\nclass Service:\n    def run(self):\n        return __load(\"w\")\n",
+            "class Service:\n    def _Service__load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._Service__load(), self.__load(\"w\")\n",
+            "import inspect\ndef _load(mode=\"r\"):\n    ...\n_load()\ndef run(name):\n    return inspect.currentframe().f_globals[name](\"w\")\n",
+            "class Service:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(\"w\")\n    _Service__load = lambda self, mode: mode\n",
+            "class Service:\n    def _Service__load(self, mode=\"r\"):\n        ...\n    def __load(self, mode):\n        ...\n    def run(self):\n        return self._Service__load(\"w\")\n",
+            "class Service:\n    def _Service__load(self, mode=\"r\"):\n        ...\n    __load = lambda self, mode: mode\n    def run(self):\n        return self._Service__load(\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def __getattribute__(self, name):\n        return lambda mode: mode\n    def run(self):\n        return self._load(\"w\")\n",
+            "class Service:\n    @classmethod\n    @staticmethod\n    def _load(cls, mode=\"r\"):\n        ...\nService._load()\nService._load(\"w\")\n",
+            "lookup = getattr\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), self.__getattribute__(\"_lo\" + suffix)(\"w\")\n",
+            "import operator\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), operator.attrgetter(\"service._load\")(self)(\"w\")\n",
+            "def _load(mode=\"r\"):\n    ...\nclass Box[T: _load(\"w\")]:\n    pass\n_load()\n",
+            "class Service:\n    @staticmethod\n    def _load(mode=\"r\"):\n        ...\n    DEFAULT = _load(\"w\")\n    def run(self):\n        return self._load()\n",
+            "class collections:\n    @staticmethod\n    def _count(mapping, iterable=()):\n        ...\nimport collections.abc\ncollections._count({}, [1])\n",
+            "from random import Random\ndef replace(cls):\n    return Random\n@replace\nclass Service:\n    @staticmethod\n    def _pick(n=10):\n        ...\nService._pick(Service(), 6)\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\nAlias = Service\nAlias._load(Service())\n",
+            "def _load(mode=None):\n    ...\ndef run(event):\n    match event:\n        case {\"callback\": _load}:\n            _load()\n",
+            "def _load(mode=None):\n    ...\ntry:\n    pass\nexcept Exception as _load:\n    _load()\n",
+            "class Service:\n    def _load(self, mode=None):\n        ...\n    def run(self):\n        self._load()\n        callback(self._load)\n",
+        ];
+        for source in allowed {
+            assert!(
+                check_rule(source, "GR002").is_empty(),
+                "unexpected GR002 for {source}"
+            );
+        }
+    }
+
+    #[test]
     fn suppresses_each_rule_independently() {
         let findings = check_all_rules(
             Path::new("test.py"),
-            "def _load(\\\n    path=None):  # noqa: GR001 -- positional protocol\n    ...\n",
+            "def _load(\\\n    path=None):  # noqa: GR001 -- positional protocol\n    ...\n_load()\n",
         );
 
         assert_eq!(findings.len(), 1);

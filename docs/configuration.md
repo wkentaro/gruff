@@ -100,7 +100,7 @@ Together, GR001 and GR005 make every definition declare each input as positional
      return resize(data, keep_aspect=keep_aspect)
 ```
 
-GR002 removes defaults from non-public callables; `B006` and `B008` catch shared mutable defaults and import-time call defaults on the public callables that keep theirs:
+GR002 removes a default that callers never vary. `B006` and `B008` catch shared mutable defaults and import-time call defaults on the callables that keep theirs:
 
 ```diff
 -def make_thumbnails(data: bytes, /, *, widths: list[int] = []) -> list[bytes]:

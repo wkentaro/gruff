@@ -2,7 +2,7 @@
 
 ## What it does
 
-Flags a non-public module-level function or method whose first body statement is a string literal. The rule uses the same non-public definition boundary as `explicit-non-public-input-conventions` (GR001) and `required-non-public-inputs` (GR002).
+Flags a non-public module-level function or method whose first body statement is a string literal. The rule uses the same non-public definition boundary as `explicit-non-public-input-conventions` (GR001).
 
 Public definitions, nested functions, methods of a class defined inside a function, and ordinary comments are outside the rule. The finding points at the docstring literal, and Gruff does not rewrite the source.
 

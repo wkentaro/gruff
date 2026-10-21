@@ -54,7 +54,7 @@ The first release tests eleven theses: inputs are easier to trace when definitio
 | Code | Rule | Policy |
 | --- | --- | --- |
 | GR001 | [`explicit-non-public-input-conventions`](https://wkentaro.github.io/gruff/rules/explicit-non-public-input-conventions/) | Every fixed input to a non-public callable has an explicit calling convention. |
-| GR002 | [`required-non-public-inputs`](https://wkentaro.github.io/gruff/rules/required-non-public-inputs/) | Callers supply every fixed input to non-public callables. |
+| GR002 | [`no-uniform-non-public-defaults`](https://wkentaro.github.io/gruff/rules/no-uniform-non-public-defaults/) | Some calls in its module pass a module-private default and others omit it. |
 | GR003 | [`package-dunder-all`](https://wkentaro.github.io/gruff/rules/package-dunder-all/) | Every public package import path defines `__all__`. |
 | GR004 | [`final-constants`](https://wkentaro.github.io/gruff/rules/final-constants/) | Uppercase names and `Final` annotations appear together. |
 | GR005 | [`explicit-public-input-conventions`](https://wkentaro.github.io/gruff/rules/explicit-public-input-conventions/) | Every fixed input to a public callable has an explicit calling convention. |
