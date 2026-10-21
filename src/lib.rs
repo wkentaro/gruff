@@ -1423,6 +1423,8 @@ mod tests {
             "class Service:\n    def _Service__load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._Service__load(), self.__load(\"w\")\n",
             "import inspect\ndef _load(mode=\"r\"):\n    ...\n_load()\ndef run(name):\n    return inspect.currentframe().f_globals[name](\"w\")\n",
             "class Service:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(\"w\")\n    _Service__load = lambda self, mode: mode\n",
+            "class Service:\n    def _Service__load(self, mode=\"r\"):\n        ...\n    def __load(self, mode):\n        ...\n    def run(self):\n        return self._Service__load(\"w\")\n",
+            "class Service:\n    def _Service__load(self, mode=\"r\"):\n        ...\n    __load = lambda self, mode: mode\n    def run(self):\n        return self._Service__load(\"w\")\n",
             "lookup = getattr\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), self.__getattribute__(\"_lo\" + suffix)(\"w\")\n",
             "import operator\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), operator.attrgetter(\"service._load\")(self)(\"w\")\n",

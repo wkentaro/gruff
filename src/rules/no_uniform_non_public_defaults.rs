@@ -72,15 +72,23 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
                     candidate.key(),
                     Usage {
                         // A class name bound twice, such as by a parameter, may name another
-                        // object, so calls through it cannot be tied to the method. A `__name`
-                        // method is stored as `_Class__name`, which a binding under that spelling
-                        // replaces.
+                        // object, so calls through it cannot be tied to the method. Python stores
+                        // `__name` and `_Class__name` in a class under the same key, so a binding
+                        // under the other spelling replaces the method.
                         is_opaque: owner.is_some_and(|owner| {
                             let name = candidate.definition.name.as_str();
-                            let mangled = format!("_{}{name}", owner.trim_start_matches('_'));
+                            let prefix = format!("_{}", owner.trim_start_matches('_'));
+                            let other_spelling = if name.starts_with("__") {
+                                Some(format!("{prefix}{name}"))
+                            } else {
+                                name.strip_prefix(prefix.as_str())
+                                    .filter(|rest| rest.starts_with("__"))
+                                    .map(ToString::to_string)
+                            };
                             bindings.counts[owner] != 1
-                                || (name.starts_with("__")
-                                    && bindings.counts.contains_key(mangled.as_str()))
+                                || other_spelling.is_some_and(|other| {
+                                    bindings.counts.contains_key(other.as_str())
+                                })
                         }),
                         // Only an instance method's receiver comes from the instance, so only its
                         // call through the class passes the receiver as the first argument.
