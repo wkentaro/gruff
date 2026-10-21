@@ -47,9 +47,10 @@ const LOOKUP_FUNCTIONS: [&str; 11] = [
 pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     let mut bindings = BindingCollector::default();
     bindings.visit_body(statements);
-    // A wildcard import may rebind any name, so no call can be tied to a definition, and a
-    // rebound `staticmethod` or `classmethod` hides how a method binds its receiver.
-    if ["*", "staticmethod", "classmethod"]
+    // A wildcard import may rebind any name, so no call can be tied to a definition, a rebound
+    // `staticmethod` or `classmethod` hides how a method binds its receiver, and a custom
+    // `__getattribute__` may return anything for a method's name.
+    if ["*", "staticmethod", "classmethod", "__getattribute__"]
         .iter()
         .any(|name| bindings.counts.contains_key(name))
     {

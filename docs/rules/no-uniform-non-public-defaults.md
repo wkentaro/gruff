@@ -16,7 +16,7 @@ The rule reads only the definition's own module, so it skips a definition when i
 - A decorator other than `staticmethod` or `classmethod` wraps it.
 - An attribute has the function's name, as in `module._load()`.
 - Another definition, parameter, import, assignment, `match` capture, or `except` name in the module binds the same name.
-- The module has a wildcard import or rebinds `staticmethod` or `classmethod`.
+- The module has a wildcard import, rebinds `staticmethod` or `classmethod`, or defines `__getattribute__`.
 
 It skips the whole module when a name built at runtime may reach a definition: `getattr`, `hasattr`, `setattr`, `delattr`, `attrgetter`, or `methodcaller` with a name that is not a string literal, any call to `eval`, `exec`, `globals`, `locals`, `vars`, or `__getattribute__`, any `__dict__`, `__globals__`, `__builtins__`, `f_globals`, `f_locals`, or `f_builtins` access, or any of these functions referenced or imported under another name.
 
