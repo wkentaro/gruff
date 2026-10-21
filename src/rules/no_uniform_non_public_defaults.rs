@@ -7,6 +7,7 @@ use ruff_python_ast::ExceptHandler;
 use ruff_python_ast::Expr;
 use ruff_python_ast::ExprCall;
 use ruff_python_ast::ExprContext;
+use ruff_python_ast::InterpolatedStringElement;
 use ruff_python_ast::Parameter;
 use ruff_python_ast::Pattern;
 use ruff_python_ast::Stmt;
@@ -14,6 +15,7 @@ use ruff_python_ast::StmtFunctionDef;
 use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::visitor::walk_except_handler;
 use ruff_python_ast::visitor::walk_expr;
+use ruff_python_ast::visitor::walk_interpolated_string_element;
 use ruff_python_ast::visitor::walk_parameter;
 use ruff_python_ast::visitor::walk_pattern;
 use ruff_python_ast::visitor::walk_stmt;
@@ -189,13 +191,15 @@ impl<'a> CallWalker<'a> {
     // double-leading method name may be spelled `_Class__name` from outside its class. The walk
     // cannot resolve either, so such a reference makes the definition's calls untrusted.
     fn mark_unresolved_attribute(&mut self, attribute_name: &'a str) {
+        // The class name in `_Class__name` may itself contain `__`, so every split is tried.
         let mangled = attribute_name
             .strip_prefix('_')
-            .and_then(|rest| rest.find("__").map(|index| (&rest[index..], true)));
-        for key in [Some((attribute_name, false)), mangled]
             .into_iter()
-            .flatten()
-        {
+            .flat_map(|rest| {
+                rest.match_indices("__")
+                    .map(move |(index, _)| (&rest[index..], true))
+            });
+        for key in std::iter::once((attribute_name, false)).chain(mangled) {
             if let Some(usage) = self.usages.get_mut(&key) {
                 usage.is_opaque = true;
             }
@@ -208,6 +212,11 @@ impl<'a> CallWalker<'a> {
         if let Some(usage) = self.usages.get_mut(&(name, true)) {
             usage.is_opaque = true;
         }
+    }
+
+    fn mark_string_reference(&mut self, value: &'a str) {
+        self.mark_unresolved_attribute(value);
+        self.mark_bare_method_reference(value);
     }
 
     fn record_call(&mut self, call: &'a ExprCall) {
@@ -340,9 +349,7 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
             }
             // A string naming a candidate may reach it through `getattr` or a namespace lookup.
             Expr::StringLiteral(string) => {
-                let value = string.value.to_str();
-                self.mark_unresolved_attribute(value);
-                self.mark_bare_method_reference(value);
+                self.mark_string_reference(string.value.to_str());
             }
             Expr::Lambda(lambda) => {
                 if let Some(parameters) = &lambda.parameters {
@@ -354,6 +361,13 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
             }
             _ => walk_expr(self, expression),
         }
+    }
+
+    fn visit_interpolated_string_element(&mut self, element: &'a InterpolatedStringElement) {
+        if let InterpolatedStringElement::Literal(literal) = element {
+            self.mark_string_reference(&literal.value);
+        }
+        walk_interpolated_string_element(self, element);
     }
 }
 

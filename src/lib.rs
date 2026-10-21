@@ -1396,6 +1396,8 @@ mod tests {
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), getattr(self, \"_load\")(\"w\")\n",
             "def _load(mode=\"r\"):\n    ...\ndef run[T: _load(\"w\")]():\n    pass\n_load()\n",
             "class Service:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(), getattr(self, \"_Service__load\")(\"w\")\n",
+            "class Service__Impl:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(), getattr(self, \"_Service__Impl__load\")(\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), getattr(self, f\"_load\")(\"w\")\n",
             "def _load(mode=\"r\"):\n    ...\nclass Box[T: _load(\"w\")]:\n    pass\n_load()\n",
             "class Service:\n    @staticmethod\n    def _load(mode=\"r\"):\n        ...\n    DEFAULT = _load(\"w\")\n    def run(self):\n        return self._load()\n",
             "class collections:\n    @staticmethod\n    def _count(mapping, iterable=()):\n        ...\nimport collections.abc\ncollections._count({}, [1])\n",
