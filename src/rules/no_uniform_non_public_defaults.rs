@@ -382,11 +382,13 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
             Expr::Name(_) | Expr::Attribute(_) => {
                 match expression {
                     Expr::Attribute(attribute)
-                        if matches!(attribute.attr.as_str(), "__dict__" | "__getattribute__") =>
+                        if matches!(attribute.attr.as_str(), "__dict__" | "__getattribute__")
+                            || LOOKUP_FUNCTIONS.contains(&attribute.attr.as_str()) =>
                     {
                         self.has_dynamic_lookup = true;
                     }
-                    // A lookup function that escapes, as in `lookup = getattr`, is no longer
+                    // A lookup function that escapes, as in `lookup = getattr` or
+                    // `lookup = builtins.getattr`, is no longer
                     // recognizable at its calls.
                     Expr::Name(name) if LOOKUP_FUNCTIONS.contains(&name.id.as_str()) => {
                         self.has_dynamic_lookup = true;

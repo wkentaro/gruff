@@ -1412,6 +1412,8 @@ mod tests {
             "def _load(mode=\"r\"):\n    ...\n_load()\nglobals()[NAME](\"w\")\n",
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, key):\n        return self._load(), type(self).__dict__[key](self, \"w\")\n",
             "from builtins import getattr as lookup\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
+            "import builtins\nlookup = builtins.getattr\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
+            "import operator\nlookup = operator.methodcaller\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, name):\n        return self._load(), lookup(name, \"w\")(self)\n",
             "lookup = getattr\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), self.__getattribute__(\"_lo\" + suffix)(\"w\")\n",
             "import operator\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), operator.attrgetter(\"service._load\")(self)(\"w\")\n",
