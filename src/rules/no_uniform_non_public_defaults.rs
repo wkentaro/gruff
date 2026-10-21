@@ -251,17 +251,35 @@ impl<'a> CallWalker<'a> {
 
 impl<'a> Visitor<'a> for CallWalker<'a> {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
-        let scope = match statement {
-            Stmt::ClassDef(class) => Scope::Class(class.name.as_str()),
-            Stmt::FunctionDef(function) => Scope::Function(
-                matches!(self.scopes.last(), Some(Scope::Class(_)))
+        // Decorators, bases, defaults, and annotations run in the enclosing scope, so only the body
+        // enters the new one.
+        let (scope, body) = match statement {
+            Stmt::ClassDef(class) => {
+                for decorator in &class.decorator_list {
+                    self.visit_decorator(decorator);
+                }
+                if let Some(arguments) = &class.arguments {
+                    self.visit_arguments(arguments);
+                }
+                (Scope::Class(class.name.as_str()), &class.body)
+            }
+            Stmt::FunctionDef(function) => {
+                for decorator in &function.decorator_list {
+                    self.visit_decorator(decorator);
+                }
+                self.visit_parameters(&function.parameters);
+                if let Some(returns) = &function.returns {
+                    self.visit_annotation(returns);
+                }
+                let receiver = matches!(self.scopes.last(), Some(Scope::Class(_)))
                     .then(|| trusted_receiver(function))
-                    .flatten(),
-            ),
+                    .flatten();
+                (Scope::Function(receiver), &function.body)
+            }
             _ => return walk_stmt(self, statement),
         };
         self.scopes.push(scope);
-        walk_stmt(self, statement);
+        self.visit_body(body);
         self.scopes.pop();
     }
 
@@ -287,9 +305,12 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
                 }
                 walk_expr(self, expression);
             }
-            Expr::Lambda(_) => {
+            Expr::Lambda(lambda) => {
+                if let Some(parameters) = &lambda.parameters {
+                    self.visit_parameters(parameters);
+                }
                 self.scopes.push(Scope::Function(None));
-                walk_expr(self, expression);
+                self.visit_expr(&lambda.body);
                 self.scopes.pop();
             }
             _ => walk_expr(self, expression),
@@ -307,7 +328,14 @@ fn uniform_default_diagnostics(candidate: &Candidate, usage: &Usage<'_>) -> Vec<
     inputs
         .iter()
         .enumerate()
-        .filter(|(_, input)| !input.is_required)
+        // Python mangles a method's `__name` input to `_Class__name`, which callers may spell
+        // either way, so such an input is left alone.
+        .filter(|(_, input)| {
+            let is_mangled = candidate.is_method
+                && is_non_public_name(input.name)
+                && input.name.starts_with("__");
+            !input.is_required && !is_mangled
+        })
         .filter_map(|(index, input)| {
             let passed_count = usage
                 .calls

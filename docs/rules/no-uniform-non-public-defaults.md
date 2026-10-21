@@ -12,6 +12,7 @@ The rule reads only the definition's own module, so it skips a definition when i
 - A method is called through anything other than its class's name or the receiver of a method in that class, as in `service._load()`. The receiver is `self` in an undecorated method or `cls` in a classmethod, and only while the method never rebinds it.
 - An instance method is called through `cls` or its class, as in `Service._load(service)`.
 - A method with a double-underscore name is referenced by its mangled name, as in `service._Service__load()`.
+- A method input has a double-underscore name, which Python mangles to `_Class__name`.
 - A decorator other than `staticmethod` or `classmethod` wraps it.
 - An attribute has the function's name, as in `module._load()`.
 - Another definition, parameter, import, assignment, `match` capture, or `except` name in the module binds the same name.

@@ -1386,6 +1386,8 @@ mod tests {
             "from random import Random\nclass Service:\n    def _pick(self, n=10):\n        ...\n    @staticmethod\n    def roll(self):\n        return self._pick(6)\n",
             "class Service:\n    def _pick(self, n=10):\n        ...\n    def roll(this):\n        return this._pick(6)\n",
             "def _load(mode=\"r\", /, **options):\n    ...\n_load(\"w\")\n_load(mode=\"a\")\n",
+            "class Service:\n    def _load(self, *, __mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), self._load(_Service__mode=\"w\")\n",
+            "from random import Random\nself = Random()\nclass Service:\n    def _pick(self, n=10):\n        ...\n    def roll(self, value=self._pick(6)):\n        ...\n",
             "class Service:\n    def _load(self, mode=None):\n        ...\nAlias = Service\nAlias._load(Service())\n",
             "def _load(mode=None):\n    ...\ndef run(event):\n    match event:\n        case {\"callback\": _load}:\n            _load()\n",
             "def _load(mode=None):\n    ...\ntry:\n    pass\nexcept Exception as _load:\n    _load()\n",
