@@ -73,8 +73,12 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
             })
             .collect(),
         scopes: Vec::new(),
+        has_dynamic_lookup: false,
     };
     walker.visit_body(statements);
+    if walker.has_dynamic_lookup {
+        return Vec::new();
+    }
 
     candidates
         .iter()
@@ -144,6 +148,9 @@ struct CallWalker<'a> {
     usages: HashMap<(&'a str, bool), Usage<'a>>,
     // The enclosing classes and functions, innermost last.
     scopes: Vec<Scope<'a>>,
+    // A name built at runtime, as in `getattr(self, name)`, `globals()[name]`, or
+    // `self.__dict__[name]`, may reach any definition, so the module's calls cannot be trusted.
+    has_dynamic_lookup: bool,
 }
 
 enum Scope<'a> {
@@ -219,7 +226,30 @@ impl<'a> CallWalker<'a> {
         self.mark_bare_method_reference(value);
     }
 
+    fn is_dynamic_lookup(call: &ExprCall) -> bool {
+        let callee = match &*call.func {
+            Expr::Name(name) => name.id.as_str(),
+            Expr::Attribute(attribute) => attribute.attr.as_str(),
+            _ => return false,
+        };
+        let args = &call.arguments.args;
+        let names: Vec<Option<&Expr>> = match callee {
+            "globals" | "locals" | "vars" => return true,
+            "getattr" | "hasattr" | "setattr" | "delattr" => vec![args.get(1)],
+            "methodcaller" => vec![args.first()],
+            "attrgetter" => args.iter().map(Some).collect(),
+            _ => return false,
+        };
+        names.is_empty()
+            || names
+                .into_iter()
+                .any(|name| !matches!(name, Some(Expr::StringLiteral(_))))
+    }
+
     fn record_call(&mut self, call: &'a ExprCall) {
+        if Self::is_dynamic_lookup(call) {
+            self.has_dynamic_lookup = true;
+        }
         match &*call.func {
             Expr::Attribute(attribute) => self.mark_unresolved_attribute(attribute.attr.as_str()),
             Expr::Name(name) => self.mark_bare_method_reference(name.id.as_str()),
@@ -336,6 +366,9 @@ impl<'a> Visitor<'a> for CallWalker<'a> {
             }
             Expr::Name(_) | Expr::Attribute(_) => {
                 match expression {
+                    Expr::Attribute(attribute) if attribute.attr.as_str() == "__dict__" => {
+                        self.has_dynamic_lookup = true;
+                    }
                     Expr::Attribute(attribute) => {
                         self.mark_unresolved_attribute(attribute.attr.as_str());
                     }

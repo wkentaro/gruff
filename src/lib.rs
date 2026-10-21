@@ -1357,6 +1357,15 @@ mod tests {
             );
         }
 
+        assert_eq!(
+            check_rule(
+                "def _load(mode=None):\n    ...\n_load()\ngetattr(obj, \"other\")\n",
+                "GR002"
+            )
+            .len(),
+            1
+        );
+
         let allowed = [
             "def _load(mode=None):\n    ...\n",
             "def _load(mode=None):\n    ...\n_load()\n_load(1)\n",
@@ -1398,6 +1407,10 @@ mod tests {
             "class Service:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(), getattr(self, \"_Service__load\")(\"w\")\n",
             "class Service__Impl:\n    def __load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self.__load(), getattr(self, \"_Service__Impl__load\")(\"w\")\n",
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), getattr(self, f\"_load\")(\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), getattr(self, \"_lo\" + suffix)(\"w\")\n",
+            "from operator import methodcaller\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, name):\n        return self._load(), methodcaller(name, \"w\")(self)\n",
+            "def _load(mode=\"r\"):\n    ...\n_load()\nglobals()[NAME](\"w\")\n",
+            "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, key):\n        return self._load(), type(self).__dict__[key](self, \"w\")\n",
             "def _load(mode=\"r\"):\n    ...\nclass Box[T: _load(\"w\")]:\n    pass\n_load()\n",
             "class Service:\n    @staticmethod\n    def _load(mode=\"r\"):\n        ...\n    DEFAULT = _load(\"w\")\n    def run(self):\n        return self._load()\n",
             "class collections:\n    @staticmethod\n    def _count(mapping, iterable=()):\n        ...\nimport collections.abc\ncollections._count({}, [1])\n",

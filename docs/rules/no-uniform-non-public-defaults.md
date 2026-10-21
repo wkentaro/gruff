@@ -18,7 +18,7 @@ The rule reads only the definition's own module, so it skips a definition when i
 - Another definition, parameter, import, assignment, `match` capture, or `except` name in the module binds the same name.
 - The module has a wildcard import or rebinds `staticmethod` or `classmethod`.
 
-The rule does not evaluate names built at runtime, such as `getattr(self, "_lo" + suffix)`. Suppress the finding on such a definition.
+It skips the whole module when a name built at runtime may reach a definition: `getattr`, `hasattr`, `setattr`, `delattr`, `attrgetter`, or `methodcaller` with a name that is not a string literal, any call to `globals`, `locals`, or `vars`, or any `__dict__` access.
 
 An ordinary name inside a non-public class, module, or package is outside the rule, because other modules may call it. Its default can hold a value that several modules share.
 
