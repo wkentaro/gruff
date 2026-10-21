@@ -1,4 +1,6 @@
+use std::cell::OnceCell;
 use std::collections::HashSet;
+use std::path::Path;
 
 use ruff_python_ast::Expr;
 use ruff_python_ast::Stmt;
@@ -231,31 +233,88 @@ pub(crate) fn classify_inputs<'a>(
         .collect()
 }
 
-pub(crate) fn find_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
+pub(crate) fn find_non_public_definitions<'a>(
+    path: &Path,
+    statements: &'a [Stmt],
+) -> Vec<(&'a StmtFunctionDef, bool)> {
+    let in_non_public_module = OnceCell::new();
+    find_scoped_definitions(statements)
+        .into_iter()
+        .filter(|&(definition, scope)| {
+            is_non_public(path, definition, scope, &in_non_public_module)
+        })
+        .map(|(definition, scope)| (definition, scope.is_class()))
+        .collect()
+}
+
+pub(crate) fn find_public_definitions<'a>(
+    path: &Path,
+    statements: &'a [Stmt],
+) -> Vec<(&'a StmtFunctionDef, bool)> {
+    let in_non_public_module = OnceCell::new();
+    find_scoped_definitions(statements)
+        .into_iter()
+        .filter(|&(definition, scope)| {
+            !is_non_public(path, definition, scope, &in_non_public_module)
+        })
+        .map(|(definition, scope)| (definition, scope.is_class()))
+        .collect()
+}
+
+fn is_non_public(
+    path: &Path,
+    definition: &StmtFunctionDef,
+    scope: DefinitionScope,
+    in_non_public_module: &OnceCell<bool>,
+) -> bool {
+    let name = &definition.name;
+    if is_non_public_name(name) {
+        return true;
+    }
+    // Dunder, sunder, and trailing-underscore names keep a protocol or keyword contract wherever
+    // they are defined, so only an ordinary name inherits its scope's privacy.
+    !name.ends_with('_')
+        && (matches!(scope, DefinitionScope::Class { non_public: true })
+            || *in_non_public_module.get_or_init(|| is_non_public_module(path)))
+}
+
+pub(crate) fn is_non_public_name(name: &str) -> bool {
+    name.starts_with('_') && !name.ends_with('_')
+}
+
+// A module is non-public when its own name or the name of any package that contains it is. The
+// package chain stops at the first directory without an `__init__.py` or `__init__.pyi`, so a
+// directory above the import root never counts. The walk runs on the canonical path so the
+// working directory's own name counts however the path was spelled.
+fn is_non_public_module(path: &Path) -> bool {
+    let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    if path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .is_some_and(is_non_public_name)
+    {
+        return true;
+    }
+    path.ancestors()
+        .skip(1)
+        .take_while(|directory| {
+            directory.join("__init__.py").is_file() || directory.join("__init__.pyi").is_file()
+        })
+        .any(|directory| {
+            directory
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(is_non_public_name)
+        })
+}
+
+fn find_scoped_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, DefinitionScope)> {
     let mut visitor = DefinitionVisitor {
         scope: DefinitionScope::Module,
         definitions: Vec::new(),
     };
     visitor.visit_body(statements);
     visitor.definitions
-}
-
-pub(crate) fn find_non_public_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
-    find_definitions(statements)
-        .into_iter()
-        .filter(|(definition, _)| is_non_public_name(&definition.name))
-        .collect()
-}
-
-pub(crate) fn find_public_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, bool)> {
-    find_definitions(statements)
-        .into_iter()
-        .filter(|(definition, _)| !is_non_public_name(&definition.name))
-        .collect()
-}
-
-pub(crate) fn is_non_public_name(name: &str) -> bool {
-    name.starts_with('_') && !name.ends_with('_')
 }
 
 fn is_static_method(definition: &StmtFunctionDef) -> bool {
@@ -267,12 +326,18 @@ fn is_static_method(definition: &StmtFunctionDef) -> bool {
 #[derive(Clone, Copy)]
 enum DefinitionScope {
     Module,
-    Class,
+    Class { non_public: bool },
+}
+
+impl DefinitionScope {
+    fn is_class(self) -> bool {
+        matches!(self, DefinitionScope::Class { .. })
+    }
 }
 
 struct DefinitionVisitor<'a> {
     scope: DefinitionScope,
-    definitions: Vec<(&'a StmtFunctionDef, bool)>,
+    definitions: Vec<(&'a StmtFunctionDef, DefinitionScope)>,
 }
 
 impl<'a> Visitor<'a> for DefinitionVisitor<'a> {
@@ -280,12 +345,15 @@ impl<'a> Visitor<'a> for DefinitionVisitor<'a> {
         match statement {
             // Nothing written inside a body that only runs when called is itself a definition, so
             // that body is left unwalked.
-            Stmt::FunctionDef(definition) => self
-                .definitions
-                .push((definition, matches!(self.scope, DefinitionScope::Class))),
-            Stmt::ClassDef(_) => {
+            Stmt::FunctionDef(definition) => self.definitions.push((definition, self.scope)),
+            Stmt::ClassDef(class) => {
                 let previous_scope = self.scope;
-                self.scope = DefinitionScope::Class;
+                self.scope = DefinitionScope::Class {
+                    non_public: matches!(
+                        previous_scope,
+                        DefinitionScope::Class { non_public: true }
+                    ) || is_non_public_name(&class.name),
+                };
                 walk_stmt(self, statement);
                 self.scope = previous_scope;
             }

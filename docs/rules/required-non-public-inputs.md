@@ -4,7 +4,7 @@
 
 Flags each fixed caller-supplied input to a non-public module-level function or method that has a default. Implicit method receivers and variadic parameters are excluded.
 
-The rule uses the same non-public definition boundary as `explicit-non-public-input-conventions` (GR001): a name that starts with an underscore and does not end with one, including `_name` and `__name` spellings.
+The rule uses the same non-public definition boundary as `explicit-non-public-input-conventions` (GR001): a name that starts with an underscore and does not end with one, including `_name` and `__name` spellings, or an ordinary name inside a non-public class, module, or package.
 
 ## Why
 
