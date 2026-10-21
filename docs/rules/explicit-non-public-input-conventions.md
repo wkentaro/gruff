@@ -4,7 +4,7 @@
 
 Flags each fixed caller-supplied input to a non-public module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
 
-A non-public definition starts with an underscore and does not end with one. This includes `_name` and `__name` spellings; double-leading names are name-mangled in class scope. Ordinary, trailing-underscore, sunder, and dunder definitions are outside the rule. Nested functions and methods of a class defined inside a function are also outside the rule.
+A non-public definition starts with an underscore and does not end with one, or has an ordinary name inside a non-public scope. This includes `_name` and `__name` spellings; double-leading names are name-mangled in class scope. A scope is non-public when its name starts with an underscore and does not end with one: an enclosing class, the module itself, as in `_helpers.py`, or any package between the module and its import root, as in `_impl/core.py`. The import root is the last directory reached by walking up through directories that hold an `__init__.py` or `__init__.pyi`, so a directory above it never counts. Trailing-underscore, sunder, and dunder definitions are outside the rule wherever they sit, as are ordinary names whose every enclosing scope is public. Nested functions and methods of a class defined inside a function are also outside the rule.
 
 ## Why
 

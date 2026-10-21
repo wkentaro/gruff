@@ -1546,6 +1546,101 @@ fn splits_input_convention_rules_under_prefix_selection() {
 }
 
 #[test]
+fn treats_definitions_in_non_public_scopes_as_non_public() {
+    let directory = create_temp_directory("non-public-scopes");
+    fs::write(
+        directory.join("pyproject.toml"),
+        "[tool.gruff]\noutput-format = \"json\"\n\n[tool.gruff.lint]\nselect = [\"GR001\", \"GR002\", \"GR005\", \"GR006\"]\n",
+    )
+    .expect("test configuration should be written");
+    let package = directory.join("pkg");
+    let private_package = package.join("_impl");
+    // A directory without `__init__.py` sits above the import root, so its name never counts.
+    let scratch = directory.join("_scratch");
+    for path in [&package, &private_package, &scratch] {
+        fs::create_dir(path).expect("test directory should be created");
+    }
+    fs::write(package.join("__init__.py"), "").expect("package should be written");
+    fs::write(private_package.join("__init__.py"), "").expect("package should be written");
+    fs::write(
+        private_package.join("core.py"),
+        "def shared(path=None):\n    \"\"\"Load a path.\"\"\"\n",
+    )
+    .expect("module in a non-public package should be written");
+    fs::write(
+        package.join("_helpers.py"),
+        "class Widget:\n    def __init__(self, path):\n        ...\n\n    def resize(self, width):\n        ...\n",
+    )
+    .expect("non-public module should be written");
+    fs::write(
+        package.join("api.py"),
+        "def public(path):\n    ...\n\nclass _Engine:\n    def run(self, task):\n        ...\n",
+    )
+    .expect("public module should be written");
+    fs::write(scratch.join("tool.py"), "def run(path):\n    ...\n")
+        .expect("module above the import root should be written");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    assert_eq!(output.status.code(), Some(1));
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    let mut actual: Vec<(String, String, u64)> = findings
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|finding| {
+            let filename = PathBuf::from(finding["filename"].as_str().unwrap());
+            let relative = filename
+                .strip_prefix(directory.canonicalize().unwrap())
+                .or_else(|_| filename.strip_prefix(&directory))
+                .unwrap_or(&filename)
+                .to_string_lossy()
+                .into_owned();
+            (
+                relative,
+                finding["code"].as_str().unwrap().to_owned(),
+                finding["location"]["row"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    actual.sort();
+    let expected: Vec<(String, String, u64)> = [
+        ("_scratch/tool.py", "GR005", 1),
+        ("pkg/_helpers.py", "GR001", 5),
+        ("pkg/_helpers.py", "GR005", 2),
+        ("pkg/_impl/core.py", "GR001", 1),
+        ("pkg/_impl/core.py", "GR002", 1),
+        ("pkg/_impl/core.py", "GR006", 2),
+        ("pkg/api.py", "GR001", 5),
+        ("pkg/api.py", "GR005", 1),
+    ]
+    .into_iter()
+    .map(|(file, code, row)| (file.to_owned(), code.to_owned(), row))
+    .collect();
+    assert_eq!(actual, expected);
+
+    // Run from inside the non-public package, its name is no longer in the given path.
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "core.py"])
+        .current_dir(&private_package)
+        .output()
+        .expect("gruff should run");
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    let codes: Vec<&str> = findings
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|finding| finding["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, ["GR001", "GR002", "GR006"]);
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn checks_package_dunder_all_findings_locations_output_and_exit_status() {
     let directory = create_temp_directory("package-dunder-all-findings");
     let sources = [

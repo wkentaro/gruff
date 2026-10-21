@@ -12,8 +12,8 @@ pub(crate) const NAME: &str = "no-non-public-docstrings";
 pub(crate) const SUMMARY: &str =
     "Non-public definitions carry their purpose in their names instead of docstrings.";
 
-pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
-    find_non_public_definitions(statements)
+pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
+    find_non_public_definitions(path, statements)
         .into_iter()
         .filter_map(|(definition, _)| {
             let docstring = definition

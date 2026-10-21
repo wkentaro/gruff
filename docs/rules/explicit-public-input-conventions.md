@@ -4,7 +4,7 @@
 
 Flags each fixed caller-supplied input to a public module-level function or method that is positional-or-keyword. It accepts and excludes the same input shapes as `explicit-non-public-input-conventions` (GR001): positional-only (`/`) and keyword-only (`*`) inputs are accepted, and implicit method receivers and variadic parameters are excluded.
 
-For this syntactic rule, public definitions are the complement of non-public definitions. They include ordinary names, public names with a trailing underscore, framework or protocol sunder hooks, and system-defined dunder methods; the label does not assert that an interface is documented or exported.
+For this syntactic rule, public definitions are the complement of non-public definitions. They include ordinary names whose every enclosing class, module, and package is public, public names with a trailing underscore, framework or protocol sunder hooks, and system-defined dunder methods; the label does not assert that an interface is documented or exported.
 
 ## Why
 

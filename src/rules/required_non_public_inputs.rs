@@ -10,8 +10,8 @@ pub(crate) const CODE: &str = "GR002";
 pub(crate) const NAME: &str = "required-non-public-inputs";
 pub(crate) const SUMMARY: &str = "Callers supply every fixed input to non-public callables.";
 
-pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
-    find_non_public_definitions(statements)
+pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
+    find_non_public_definitions(path, statements)
         .into_iter()
         .flat_map(|(definition, is_method)| {
             classify_inputs(definition, is_method)
