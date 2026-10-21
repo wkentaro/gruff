@@ -212,6 +212,7 @@ impl<'a> CallWalker<'a> {
     // double-leading method name may be spelled `_Class__name` from outside its class. The walk
     // cannot resolve either, so such a reference makes the definition's calls untrusted.
     fn mark_unresolved_attribute(&mut self, attribute_name: &'a str) {
+        self.mark_class_mangled(attribute_name, true);
         // The class name in `_Class__name` may itself contain `__`, so every split is tried.
         let mangled = attribute_name
             .strip_prefix('_')
@@ -233,8 +234,12 @@ impl<'a> CallWalker<'a> {
         if let Some(usage) = self.usages.get_mut(&(name, true)) {
             usage.is_opaque = true;
         }
-        // Inside a class, Python mangles a bare `__name` to `_Class__name`, which may be a
-        // module-level function, and the source spelling then names neither for certain.
+        self.mark_class_mangled(name, false);
+    }
+
+    // Inside a class, Python mangles `__name` and `obj.__name` to `_Class__name`, which may be a
+    // definition spelled that way.
+    fn mark_class_mangled(&mut self, name: &'a str, is_method_reference: bool) {
         let class = self.scopes.iter().rev().find_map(|scope| match scope {
             Scope::Class(class) => Some(class.trim_start_matches('_')),
             Scope::Function(_) => None,
@@ -248,7 +253,10 @@ impl<'a> CallWalker<'a> {
                     .strip_prefix('_')
                     .and_then(|rest| rest.strip_prefix(class))
                     == Some(name);
-                if !*is_method && (mangled || *function == name) {
+                // A method spelled `__name` in its own class is that method, since the receiver
+                // checks already tie the call to its class; a module function is not.
+                let is_source_spelling = !is_method_reference && *function == name;
+                if *is_method == is_method_reference && (mangled || is_source_spelling) {
                     usage.is_opaque = true;
                 }
             }

@@ -1347,6 +1347,7 @@ mod tests {
         );
 
         for source in [
+            "class Service:\n    def __load(self, mode=None):\n        ...\n    def run(self):\n        self.__load()\n",
             "class Service:\n    @staticmethod\n    def _load(mode=None):\n        ...\nService._load()\n",
             "class Service:\n    @classmethod\n    def _load(cls, mode=None):\n        ...\nService._load()\n",
         ] {
@@ -1419,6 +1420,7 @@ mod tests {
             "def _Service__load(mode=\"r\"):\n    ...\n_Service__load()\nclass Service:\n    def run(self):\n        return __load(\"w\")\n",
             "def _load(mode=\"r\"):\n    ...\n_load()\ndef run(name):\n    return run.__globals__[name](\"w\")\n",
             "def __load(mode=\"r\"):\n    ...\nclass Service:\n    def run(self):\n        return __load(\"w\")\n",
+            "class Service:\n    def _Service__load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._Service__load(), self.__load(\"w\")\n",
             "lookup = getattr\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), lookup(self, \"_lo\" + suffix)(\"w\")\n",
             "class Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self, suffix):\n        return self._load(), self.__getattribute__(\"_lo\" + suffix)(\"w\")\n",
             "import operator\nclass Service:\n    def _load(self, mode=\"r\"):\n        ...\n    def run(self):\n        return self._load(), operator.attrgetter(\"service._load\")(self)(\"w\")\n",
