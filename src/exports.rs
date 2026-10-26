@@ -49,11 +49,12 @@ pub(crate) fn public_reexports(path: &Path, statements: &[Stmt]) -> HashSet<Stri
         }) {
             continue;
         }
-        let initializer = directory.join(format!("__init__.{extension}"));
-        let initializer = if initializer.is_file() {
-            initializer
-        } else {
-            directory.join("__init__.py")
+        let Some(initializer) = [extension, "py", "pyi"]
+            .into_iter()
+            .map(|extension| directory.join(format!("__init__.{extension}")))
+            .find(|initializer| initializer.is_file())
+        else {
+            continue;
         };
         let Ok(source) = fs::read_to_string(initializer) else {
             continue;
@@ -245,6 +246,8 @@ impl<'a> Visitor<'a> for Bindings {
                     ..Self::default()
                 };
                 body.visit_body(&function.body);
+                self.all_read |= body.all_read;
+                self.dynamic_namespace |= body.dynamic_namespace;
                 for (name, count) in body.counts {
                     *self.counts.entry(name).or_default() += count;
                 }

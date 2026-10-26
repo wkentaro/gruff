@@ -1679,6 +1679,14 @@ fn recognizes_public_package_reexports_in_definition_rules() {
             "from ._impl import resize\ndef read():\n    global resize\n    return resize\nread()\n",
             vec![1],
         ),
+        (
+            "from ._impl import resize\n__all__ = ['resize']\ndef clear():\n    __all__.clear()\nclear()\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\ndef clear():\n    globals()['resize'] = None\nclear()\n",
+            vec![],
+        ),
         ("from ._impl import resize\n__all__ = []\n", vec![]),
         ("from ._impl import resize\nresize = None\n", vec![]),
         (
@@ -1822,16 +1830,22 @@ fn recognizes_public_package_reexports_in_definition_rules() {
 #[test]
 fn recognizes_reexports_from_deeper_packages_and_stubs() {
     let directory = create_temp_directory("deep-package-reexports");
-    for extension in ["py", "pyi"] {
-        let package = directory.join(format!("pkg_{extension}"));
+    for (extension, initializer_extension) in
+        [("py", "py"), ("pyi", "pyi"), ("py", "pyi"), ("pyi", "py")]
+    {
+        let package = directory.join(format!("pkg_{extension}_{initializer_extension}"));
         let implementation = package.join("_impl");
         fs::create_dir_all(&implementation).unwrap();
         fs::write(
-            package.join(format!("__init__.{extension}")),
+            package.join(format!("__init__.{initializer_extension}")),
             "from ._impl.core import resize\n__all__: tuple[str, ...] = ('resize',)\n",
         )
         .unwrap();
-        fs::write(implementation.join(format!("__init__.{extension}")), "").unwrap();
+        fs::write(
+            implementation.join(format!("__init__.{initializer_extension}")),
+            "",
+        )
+        .unwrap();
         let source = implementation.join(format!("core.{extension}"));
         fs::write(&source, "def resize(image):\n    \"\"\"Public API.\"\"\"\n").unwrap();
         let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
