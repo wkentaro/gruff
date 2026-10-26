@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.2.0 - 2026-10-26
+
+### Changed
+
+- **Breaking:** Treat direct public package re-exports as public definitions for GR001, GR002, GR005, and GR006. ([#95](https://github.com/wkentaro/gruff/pull/95))
+
 ## 0.1.1 - 2026-10-21
 
 ### Changed
