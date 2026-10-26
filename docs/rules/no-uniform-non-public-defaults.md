@@ -2,7 +2,47 @@
 
 ## What it does
 
-Flags a default on a module-level function or method whose own name starts with an underscore and does not end with one, when the calls in its module all treat that input the same way. The rule reports the input when no call passes it, or when every call passes it. A default that some calls pass and others omit is left alone.
+Flags a default parameter when every call in its module passes it, or when no
+call passes it. If some calls pass it and others omit it, the default stays.
+Only module-level functions and methods whose own names start with `_` and do
+not end with `_` are candidates.
+
+## Why
+
+A default that no call overrides acts as a fixed value. Put that value inside
+the definition. A default that every call overrides serves no current caller.
+Remove it so each caller must choose a value.
+
+## Example
+
+### No call passes the parameter
+
+Move the fixed width into the function:
+
+```diff
+-def _resize_image(*, data: bytes, width: int = 512) -> bytes:
+-    return resize(data, width=width)
++def _resize_image(*, data: bytes) -> bytes:
++    return resize(data, width=512)
+
+ def make_thumbnail(data: bytes, /) -> bytes:
+     return _resize_image(data=data)
+```
+
+### Every call passes the parameter
+
+Remove the unused default and keep the parameter required:
+
+```diff
+-def _resize_image(*, data: bytes, width: int = 512) -> bytes:
++def _resize_image(*, data: bytes, width: int) -> bytes:
+     return resize(data, width=width)
+
+ def make_thumbnail(data: bytes, /) -> bytes:
+     return _resize_image(data=data, width=256)
+```
+
+### Rule scope
 
 The rule reads only the definition's own module, so it skips a definition when it cannot see every use there:
 
@@ -20,25 +60,9 @@ The rule reads only the definition's own module, so it skips a definition when i
 
 It skips the whole module when a name built at runtime may reach a definition: `getattr`, `hasattr`, `setattr`, `delattr`, `attrgetter`, or `methodcaller` with a name that is not a string literal, any call to `eval`, `exec`, `globals`, `locals`, `vars`, or `__getattribute__`, any `__dict__`, `__globals__`, `__builtins__`, `f_globals`, `f_locals`, or `f_builtins` access, or any of these functions referenced or imported under another name.
 
-Like type checkers such as pyright and mypy, the rule assumes `self` in a method is an instance of the method's class and `cls` in a classmethod is that class. It also assumes `self._load` finds the method the class defines, which a `__getattribute__` inherited from a base in another module can change. A method called unbound with an unrelated object, as in `Service.roll(Random())`, or such a base breaks these assumptions, and the rule may then attribute a call to the wrong method.
+The rule assumes `self` in a method is an instance of the method's class and `cls` in a classmethod is that class. It also assumes `self._load` finds the method the class defines, which a `__getattribute__` inherited from a base in another module can change. A method called unbound with an unrelated object, as in `Service.roll(Random())`, or such a base breaks these assumptions, and the rule may then attribute a call to the wrong method.
 
 An ordinary name inside a non-public class, module, or package is outside the rule, because other modules may call it. Its default can hold a value that several modules share.
-
-## Why
-
-A default that no call overrides is a fixed value that looks like a parameter. A reader has to check every call to learn that it never changes, so the value belongs inside the definition. A default that every call overrides only covers a case that never happens. Remove it so a new call has to choose a value. A default that some calls override keeps the common case short and is left alone.
-
-## Example
-
-```diff
--def _resize_image(*, data: bytes, width: int = 512) -> bytes:
--    return resize(data, width=width)
-+def _resize_image(*, data: bytes) -> bytes:
-+    return resize(data, width=512)
-
- def make_thumbnail(data: bytes, /) -> bytes:
-     return _resize_image(data=data)
-```
 
 ## When to suppress
 

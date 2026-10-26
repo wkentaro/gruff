@@ -2,17 +2,22 @@
 
 ## What it does
 
-Flags each fixed caller-supplied input to a non-public module-level function or method that is positional-or-keyword. Positional-only (`/`) and keyword-only (`*`) inputs declare an explicit calling convention and are accepted; implicit method receivers and variadic parameters are excluded.
-
-A non-public definition starts with an underscore and does not end with one, or has an ordinary name inside a non-public scope. This includes `_name` and `__name` spellings; double-leading names are name-mangled in class scope. A scope is non-public when its name starts with an underscore and does not end with one: an enclosing class, the module itself, as in `_helpers.py`, or any package between the module and its import root, as in `_impl/core.py`. The import root is the last directory reached by walking up through directories that hold an `__init__.py` or `__init__.pyi`, so a directory above it never counts. Trailing-underscore, sunder, and dunder definitions are outside the rule wherever they sit, as are ordinary names whose every enclosing scope is public. Nested functions and methods of a class defined inside a function are also outside the rule.
+Flags non-public function and method parameters that accept both positional and
+keyword arguments. Use `/` for positional-only parameters and `*` for keyword-only
+parameters. Implicit method receivers, `*args`, and `**kwargs` are excluded.
 
 ## Why
 
-A positional-or-keyword input leaves its calling convention to each call site, so a reader has to collect the callers before knowing how the input is passed. Positional-only and keyword-only declarations make the convention local, deterministic, and enforced at runtime.
+An explicit signature tells readers how to call a function without searching its
+call sites. Python enforces that convention at runtime.
 
-Non-public definitions let projects adopt the policy separately from public definitions, but underscore naming does not prove that the project controls every caller. A non-public definition can still implement an externally imposed callback or protocol contract. `explicit-public-input-conventions` (GR005) carries the same policy to the complementary public bucket, and the two rules partition every definition without inferring whether an interface is documented or exported.
+GR001 covers non-public definitions. [GR005](explicit-public-input-conventions.md)
+applies the same policy to public definitions, so projects can adopt each scope
+separately. A non-public name can still implement an external callback contract.
 
 ## Example
+
+Keep image data positional and require the caller to name the width:
 
 ```diff
 -def _resize_image(data: bytes, width: int) -> bytes:
@@ -23,15 +28,32 @@ Non-public definitions let projects adopt the policy separately from public defi
      return _resize_image(data, width=512)
 ```
 
+Parameters before `/` accept positional arguments only. Parameters after `*`
+accept keyword arguments only. Inspect and update callers with the signature.
+
+### Rule scope
+
+A definition is non-public when its name starts with `_` and does not end with
+`_`, or when an ordinary name sits inside a non-public class, module, or package.
+This includes `_name` and `__name`, with Python's usual name mangling in classes.
+For example, `_helpers.py` and `_impl/core.py` make ordinary definitions non-public.
+
+Package scope stops at the import root, the last directory reached by walking
+up through directories containing `__init__.py` or `__init__.pyi`. Names above
+that root do not count. Trailing-underscore, sunder, and dunder definitions are
+excluded, as are nested functions and methods of classes defined inside functions.
+
 ## When to suppress
 
-Fix the finding by default when the project controls the calling contract: inspect callers, choose positional-only for a value whose role the name already carries and keyword-only for the rest, then update callers together with the signature. For framework callbacks and protocol implementations, first establish the external contract regardless of the definition's name.
+Suppress a definition when an external contract requires both call styles.
+Otherwise, choose a convention and migrate its callers.
 
-A passing type check does not prove callback compatibility. A framework may store a callback behind `Any` or a callable type that does not describe its parameters, then invoke it dynamically with arguments the type checker cannot match to its signature.
+A type check alone cannot prove callback compatibility. Frameworks may dispatch
+callbacks through `Any` or a callable type that omits their parameters. Test the
+actual registration and dispatch path, and check that the callback ran and
+produced the expected result without errors.
 
-After changing `/` or `*` placement, run the affected framework lifecycle or a focused smoke test that reaches the callback through the framework's actual registration and dispatch path. Check that the callback ran and produced its expected effect without callback errors. Calling it directly with arguments tailored to the new signature is insufficient.
-
-For example, this runnable standard-library scheduler example models a contract requiring both call styles:
+This standard-library scheduler dispatches the same callback both ways:
 
 ```python
 import sched
@@ -50,13 +72,14 @@ scheduler.run()
 assert events == ["positional", "keyword"]
 ```
 
-Changing the callback to `def _record_event(*, event: str) -> None` makes `scheduler.run()` raise `TypeError` on the positional dispatch, even though a direct `_record_event(event="positional")` call succeeds. Changing it to `def _record_event(event: str, /) -> None` breaks the keyword dispatch instead. If those call styles are imposed by an external contract, retain the original signature and suppress the finding; if the project controls the registrations, migrate them with the signature.
+Adding `*` before `event` breaks the positional dispatch. Adding `/` after it
+breaks the keyword dispatch. A direct call tailored to either new signature
+would miss the failure. If you control the registrations, change them together
+with the signature; otherwise, retain the suppression.
 
-Suppress only when the definition is bound to an external contract that must keep accepting both positional and keyword calls:
-
-```python
-def _handler(request: Request, context: Context) -> Response:  # noqa: GR001 -- contract accepts both call styles
-    return respond(request, context)
-```
-
-Prefer an inline suppression because it keeps the exception next to its reason. Before introducing a per-file ignore for GR001, run the rule without that ignore and audit every GR001 finding in every matched file, including reviewing existing inline exceptions. Use a per-file ignore only when all GR001 findings share the same intentional contract exception. Fix unrelated findings and keep inline suppressions for exceptions with different reasons. A per-file ignore also hides future GR001 findings, even when they are unrelated to the audited exception.
+Prefer inline suppressions with a reason. Before adding a per-file ignore, run
+the rule without it and audit every GR001 finding in every matched file, including
+existing inline exceptions. Use a per-file ignore only when all findings share
+the same intentional contract exception. Fix unrelated findings and keep inline
+suppressions for exceptions with different reasons. A per-file ignore also hides
+future findings that may have nothing to do with the audited exception.
