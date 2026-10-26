@@ -4,8 +4,9 @@
 
 Flags docstrings on non-public module-level functions and methods. Uses the same
 [non-public scope](explicit-non-public-input-conventions.md#rule-scope) as GR001.
-Public definitions, nested functions, methods of classes defined inside functions,
-and ordinary comments are excluded.
+Public definitions, including recognized direct package re-exports, are excluded.
+So are nested functions, methods of classes defined inside functions, and ordinary
+comments.
 
 ## Why
 

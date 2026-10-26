@@ -33,6 +33,7 @@ use crate::analysis::find_noqa_directive;
 use crate::analysis::matches_noqa_rules;
 
 mod analysis;
+mod exports;
 mod rules;
 
 #[derive(Serialize)]

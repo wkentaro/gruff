@@ -238,10 +238,11 @@ pub(crate) fn find_non_public_definitions<'a>(
     statements: &'a [Stmt],
 ) -> Vec<(&'a StmtFunctionDef, bool)> {
     let in_non_public_module = OnceCell::new();
-    find_scoped_definitions(statements)
+    let exports = crate::exports::public_reexports(path, statements);
+    find_scoped_definitions(statements, &exports)
         .into_iter()
         .filter(|&(definition, scope)| {
-            is_non_public(path, definition, scope, &in_non_public_module)
+            is_non_public(path, definition, scope, &in_non_public_module, &exports)
         })
         .map(|(definition, scope)| (definition, scope.is_class()))
         .collect()
@@ -252,10 +253,11 @@ pub(crate) fn find_public_definitions<'a>(
     statements: &'a [Stmt],
 ) -> Vec<(&'a StmtFunctionDef, bool)> {
     let in_non_public_module = OnceCell::new();
-    find_scoped_definitions(statements)
+    let exports = crate::exports::public_reexports(path, statements);
+    find_scoped_definitions(statements, &exports)
         .into_iter()
         .filter(|&(definition, scope)| {
-            !is_non_public(path, definition, scope, &in_non_public_module)
+            !is_non_public(path, definition, scope, &in_non_public_module, &exports)
         })
         .map(|(definition, scope)| (definition, scope.is_class()))
         .collect()
@@ -266,16 +268,26 @@ fn is_non_public(
     definition: &StmtFunctionDef,
     scope: DefinitionScope,
     in_non_public_module: &OnceCell<bool>,
+    exports: &HashSet<String>,
 ) -> bool {
     let name = &definition.name;
+    if matches!(scope, DefinitionScope::Module) && exports.contains(name.as_str()) {
+        return false;
+    }
     if is_non_public_name(name) {
         return true;
     }
     // Dunder, sunder, and trailing-underscore names keep a protocol or keyword contract wherever
     // they are defined, so only an ordinary name inherits its scope's privacy.
     !name.ends_with('_')
-        && (matches!(scope, DefinitionScope::Class { non_public: true })
-            || *in_non_public_module.get_or_init(|| is_non_public_module(path)))
+        && (matches!(
+            scope,
+            DefinitionScope::Class {
+                non_public: true,
+                ..
+            }
+        ) || (!matches!(scope, DefinitionScope::Class { exported: true, .. })
+            && *in_non_public_module.get_or_init(|| is_non_public_module(path))))
 }
 
 pub(crate) fn is_non_public_name(name: &str) -> bool {
@@ -308,10 +320,14 @@ fn is_non_public_module(path: &Path) -> bool {
         })
 }
 
-fn find_scoped_definitions(statements: &[Stmt]) -> Vec<(&StmtFunctionDef, DefinitionScope)> {
+fn find_scoped_definitions<'a>(
+    statements: &'a [Stmt],
+    exports: &HashSet<String>,
+) -> Vec<(&'a StmtFunctionDef, DefinitionScope)> {
     let mut visitor = DefinitionVisitor {
         scope: DefinitionScope::Module,
         definitions: Vec::new(),
+        exports,
     };
     visitor.visit_body(statements);
     visitor.definitions
@@ -326,7 +342,7 @@ fn is_static_method(definition: &StmtFunctionDef) -> bool {
 #[derive(Clone, Copy)]
 enum DefinitionScope {
     Module,
-    Class { non_public: bool },
+    Class { non_public: bool, exported: bool },
 }
 
 impl DefinitionScope {
@@ -335,12 +351,13 @@ impl DefinitionScope {
     }
 }
 
-struct DefinitionVisitor<'a> {
+struct DefinitionVisitor<'a, 'b> {
     scope: DefinitionScope,
     definitions: Vec<(&'a StmtFunctionDef, DefinitionScope)>,
+    exports: &'b HashSet<String>,
 }
 
-impl<'a> Visitor<'a> for DefinitionVisitor<'a> {
+impl<'a> Visitor<'a> for DefinitionVisitor<'a, '_> {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
         match statement {
             // Nothing written inside a body that only runs when called is itself a definition, so
@@ -348,11 +365,21 @@ impl<'a> Visitor<'a> for DefinitionVisitor<'a> {
             Stmt::FunctionDef(definition) => self.definitions.push((definition, self.scope)),
             Stmt::ClassDef(class) => {
                 let previous_scope = self.scope;
+                let directly_exported = matches!(previous_scope, DefinitionScope::Module)
+                    && self.exports.contains(class.name.as_str());
                 self.scope = DefinitionScope::Class {
                     non_public: matches!(
                         previous_scope,
-                        DefinitionScope::Class { non_public: true }
-                    ) || is_non_public_name(&class.name),
+                        DefinitionScope::Class {
+                            non_public: true,
+                            ..
+                        }
+                    ) || (is_non_public_name(&class.name) && !directly_exported),
+                    exported: directly_exported
+                        || matches!(
+                            previous_scope,
+                            DefinitionScope::Class { exported: true, .. }
+                        ),
                 };
                 walk_stmt(self, statement);
                 self.scope = previous_scope;
