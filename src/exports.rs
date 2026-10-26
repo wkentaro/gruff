@@ -299,6 +299,13 @@ impl<'a> Visitor<'a> for Bindings {
             if let Some(parameters) = &lambda.parameters {
                 self.visit_parameters(parameters);
             }
+            let mut body = Self {
+                scope_depth: 1,
+                ..Self::default()
+            };
+            body.visit_expr(&lambda.body);
+            self.all_read |= body.all_read;
+            self.dynamic_namespace |= body.dynamic_namespace;
             return;
         }
         if let Expr::Compare(comparison) = expression {

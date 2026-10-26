@@ -1687,6 +1687,14 @@ fn recognizes_public_package_reexports_in_definition_rules() {
             "from ._impl import resize\ndef clear():\n    globals()['resize'] = None\nclear()\n",
             vec![],
         ),
+        (
+            "from ._impl import resize\n__all__ = ['resize']\nclear = lambda: __all__.clear()\nclear()\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\nclear = lambda: globals().__setitem__('resize', None)\nclear()\n",
+            vec![],
+        ),
         ("from ._impl import resize\n__all__ = []\n", vec![]),
         ("from ._impl import resize\nresize = None\n", vec![]),
         (
