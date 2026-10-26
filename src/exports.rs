@@ -27,13 +27,13 @@ pub(crate) fn public_reexports(path: &Path, statements: &[Stmt]) -> HashSet<Stri
     let packages: Vec<_> = path
         .ancestors()
         .skip(1)
-        .take_while(|directory| {
+        .filter(|directory| {
             directory.join("__init__.py").is_file() || directory.join("__init__.pyi").is_file()
         })
         .collect();
-    if packages.is_empty() {
+    let Some(import_root) = packages.last().and_then(|package| package.parent()) else {
         return HashSet::new();
-    }
+    };
     let extension = path
         .extension()
         .and_then(|value| value.to_str())
@@ -80,7 +80,7 @@ pub(crate) fn public_reexports(path: &Path, statements: &[Stmt]) -> HashSet<Stri
                 continue;
             };
             let matches = if import.level == 0 {
-                directory.ancestors().any(|base| {
+                import_root.ancestors().any(|base| {
                     imported_file(base, module.as_str(), extension).as_ref() == Some(&path)
                 })
             } else {

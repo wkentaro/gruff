@@ -1903,6 +1903,53 @@ fn resolves_reexports_through_namespaces_and_package_module_collisions() {
 }
 
 #[test]
+fn resolves_reexports_across_namespace_gaps_without_implicit_relative_imports() {
+    let directory = create_temp_directory("reexport-package-roots");
+    let package = directory.join("pkg");
+    fs::create_dir_all(package.join("helpers")).unwrap();
+    let source = "def resize(image):\n    \"\"\"Image API.\"\"\"\n";
+    fs::write(directory.join("_impl.py"), source).unwrap();
+    fs::write(package.join("_impl.py"), source).unwrap();
+    fs::write(package.join("helpers/_impl.py"), source).unwrap();
+    for (initializer, target, expected) in [
+        (
+            "from _impl import resize\n",
+            "_impl.py",
+            vec!["GR001", "GR006"],
+        ),
+        (
+            "from .helpers._impl import resize\n",
+            "helpers/_impl.py",
+            vec!["GR005"],
+        ),
+    ] {
+        fs::write(package.join("__init__.py"), initializer).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                "GR001,GR005,GR006",
+                "--output-format",
+                "json",
+            ])
+            .arg(package.join(target))
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let findings: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let codes: Vec<&str> = findings
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|finding| finding["code"].as_str().unwrap())
+            .collect();
+        assert_eq!(codes, expected, "initializer: {initializer}");
+    }
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn checks_package_dunder_all_findings_locations_output_and_exit_status() {
     let directory = create_temp_directory("package-dunder-all-findings");
     let sources = [
