@@ -1667,6 +1667,18 @@ fn recognizes_public_package_reexports_in_definition_rules() {
             "from pkg._impl import resize, _renamed as renamed, Widget, _Widget as PublicWidget\n",
             vec![1, 5, 8, 13],
         ),
+        (
+            "from ._impl import resize\ndef clear():\n    global resize\n    resize = None\nclear()\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\nitems = {}\nitems[(resize := None)]: object\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\ndef read():\n    global resize\n    return resize\nread()\n",
+            vec![1],
+        ),
         ("from ._impl import resize\n__all__ = []\n", vec![]),
         ("from ._impl import resize\nresize = None\n", vec![]),
         (

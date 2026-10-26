@@ -55,7 +55,9 @@ without initializers. Absolute imports are resolved from ancestors above the
 outermost initialized package, never from inside that package.
 Import aliases are respected. The defining name
 must still refer to one function or class declaration, allowing overloads.
-Reassigning that name prevents promotion. Ordinary methods of a re-exported class
+Reassigning that name prevents promotion. Potential writes declared `global`
+in helper bodies prevent promotion without tracking calls.
+Ordinary methods of a re-exported class
 are public too; private method names and nested private classes stay non-public.
 
 The analysis reads source without importing Python. It resolves only

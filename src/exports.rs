@@ -193,13 +193,13 @@ struct Bindings {
     overloads: HashMap<String, usize>,
     all_read: bool,
     dynamic_namespace: bool,
-    class_depth: usize,
+    scope_depth: usize,
     globals: HashSet<String>,
 }
 
 impl Bindings {
     fn bind(&mut self, name: &str) {
-        if self.class_depth == 0 || self.globals.contains(name) {
+        if self.scope_depth == 0 || self.globals.contains(name) {
             *self.counts.entry(name.to_owned()).or_default() += 1;
         }
     }
@@ -216,7 +216,7 @@ impl<'a> Visitor<'a> for Bindings {
         match statement {
             Stmt::FunctionDef(function) => {
                 self.bind(function.name.as_str());
-                if self.class_depth == 0 {
+                if self.scope_depth == 0 {
                     *self
                         .definitions
                         .entry(function.name.to_string())
@@ -240,11 +240,19 @@ impl<'a> Visitor<'a> for Bindings {
                 if let Some(returns) = &function.returns {
                     self.visit_annotation(returns);
                 }
+                let mut body = Self {
+                    scope_depth: 1,
+                    ..Self::default()
+                };
+                body.visit_body(&function.body);
+                for (name, count) in body.counts {
+                    *self.counts.entry(name).or_default() += count;
+                }
                 return;
             }
             Stmt::ClassDef(class) => {
                 self.bind(class.name.as_str());
-                if self.class_depth == 0 {
+                if self.scope_depth == 0 {
                     *self.definitions.entry(class.name.to_string()).or_default() += 1;
                 }
                 for decorator in &class.decorator_list {
@@ -253,11 +261,11 @@ impl<'a> Visitor<'a> for Bindings {
                 if let Some(arguments) = &class.arguments {
                     self.visit_arguments(arguments);
                 }
-                self.class_depth += 1;
+                self.scope_depth += 1;
                 let globals = std::mem::take(&mut self.globals);
                 self.visit_body(&class.body);
                 self.globals = globals;
-                self.class_depth -= 1;
+                self.scope_depth -= 1;
                 return;
             }
             Stmt::Global(global) => {
@@ -272,6 +280,9 @@ impl<'a> Visitor<'a> for Bindings {
                 return;
             }
             Stmt::AnnAssign(assignment) if assignment.value.is_none() => {
+                if !matches!(assignment.target.as_ref(), Expr::Name(_)) {
+                    self.visit_expr(&assignment.target);
+                }
                 self.visit_annotation(&assignment.annotation);
                 return;
             }
