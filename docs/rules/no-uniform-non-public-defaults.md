@@ -44,6 +44,8 @@ Remove the unused default and keep the parameter required:
 
 ### Rule scope
 
+A definition directly re-exported by a public ancestor package initializer is public under the [GR001 boundary](explicit-non-public-input-conventions.md) and is excluded, even if its original name starts with an underscore.
+
 The rule reads only the definition's own module, so it skips a definition when it cannot see every use there:
 
 - It has no calls in the module.

@@ -43,6 +43,31 @@ up through directories containing `__init__.py` or `__init__.pyi`. Names above
 that root do not count. Trailing-underscore, sunder, and dunder definitions are
 excluded, as are nested functions and methods of classes defined inside functions.
 
+Direct re-exports from public ancestor package initializers override this
+boundary. For example, `from ._resize import resize` in a public `__init__.py`
+makes `resize` public even though its defining module is non-public. A literal
+list or tuple assigned to `__all__` limits exports to its entries. Without a
+manifest, imported names that do not start with `_` are public.
+
+Relative and absolute imports, including namespace-qualified imports, respect
+package-over-module precedence. Re-export discovery crosses namespace directories
+without initializers. Absolute imports are resolved from ancestors above the
+outermost initialized package, never from inside that package.
+Import aliases are respected. The defining name
+must still refer to one function or class declaration, allowing overloads.
+Reassigning that name prevents promotion. Potential writes declared `global`
+in helper bodies prevent promotion without tracking calls.
+Ordinary methods of a re-exported class
+are public too; private method names and nested private classes stay non-public.
+
+The analysis reads source without importing Python. It resolves only
+unconditional, direct `from` imports from the defining module into an ancestor
+package initializer. Shadowed or conditional imports, forwarding modules,
+wildcard imports, dynamic namespace access, and dynamic or mutated manifests
+remain unresolved. Assertions and comparisons may read a literal manifest;
+other reads are unresolved because they can expose it to mutation. Unresolved
+exports retain the name-and-scope classification above.
+
 ## When to suppress
 
 Suppress a definition when an external contract requires both call styles.

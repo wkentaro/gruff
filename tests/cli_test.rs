@@ -1640,6 +1640,350 @@ fn treats_definitions_in_non_public_scopes_as_non_public() {
 }
 
 #[test]
+fn recognizes_public_package_reexports_in_definition_rules() {
+    let directory = create_temp_directory("public-package-reexports");
+    let package = directory.join("pkg");
+    fs::create_dir(&package).unwrap();
+    fs::write(
+        package.join("_impl.py"),
+        concat!(
+            "def resize(image):\n    \"\"\"Public image API.\"\"\"\n",
+            "def helper(value):\n    \"\"\"Internal helper.\"\"\"\n",
+            "def _renamed(value):\n    \"\"\"Public under an alias.\"\"\"\n",
+            "class Widget:\n",
+            "    def draw(self, image):\n        \"\"\"Public method.\"\"\"\n",
+            "    def _draw(self, image):\n        \"\"\"Internal method.\"\"\"\n",
+            "class _Widget:\n    def draw(self, image):\n        \"\"\"Exported class method.\"\"\"\n",
+        ),
+    )
+    .unwrap();
+
+    for (initializer, public_rows) in [
+        (
+            "from ._impl import resize, helper, _renamed as renamed, Widget, _Widget as PublicWidget\n__all__ = ['resize', 'renamed', 'Widget', 'PublicWidget']\n",
+            vec![1, 5, 8, 13],
+        ),
+        (
+            "from pkg._impl import resize, _renamed as renamed, Widget, _Widget as PublicWidget\n",
+            vec![1, 5, 8, 13],
+        ),
+        (
+            "from ._impl import resize\ndef clear():\n    global resize\n    resize = None\nclear()\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\nitems = {}\nitems[(resize := None)]: object\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\ndef read():\n    global resize\n    return resize\nread()\n",
+            vec![1],
+        ),
+        (
+            "from ._impl import resize\n__all__ = ['resize']\ndef clear():\n    __all__.clear()\nclear()\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\ndef clear():\n    globals()['resize'] = None\nclear()\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\n__all__ = ['resize']\nclear = lambda: __all__.clear()\nclear()\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\nclear = lambda: globals().__setitem__('resize', None)\nclear()\n",
+            vec![],
+        ),
+        ("from ._impl import resize\n__all__ = []\n", vec![]),
+        ("from ._impl import resize\nresize = None\n", vec![]),
+        (
+            "from ._impl import resize\n__all__ = get_exports()\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\n__all__ = ['resize']\n__all__.clear()\n",
+            vec![],
+        ),
+        ("if False:\n    from ._impl import resize\n", vec![]),
+        (
+            "from ._impl import resize\ndef wrapper():\n    resize = None\nclass Holder:\n    resize = None\n",
+            vec![1],
+        ),
+        (
+            "from ._impl import resize\n__all__ = ('resize',)\nassert 'resize' in __all__\n",
+            vec![1],
+        ),
+        (
+            "from ._impl import resize\n__all__ = ['resize']\nassert __all__\nassert __all__ == ['resize']\n",
+            vec![1],
+        ),
+        (
+            "from ._impl import resize\ndef wrapper(value=(resize := None)):\n    pass\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\nclass Holder:\n    global resize\n    resize = None\n",
+            vec![],
+        ),
+        (
+            "from ._impl import resize\nitems = [resize for resize in range(2)]\nunused = lambda: (resize := None)\nresize: object\n",
+            vec![1],
+        ),
+        (
+            "from ._impl import resize\nitems = [(resize := None) for item in range(2)]\n",
+            vec![],
+        ),
+    ] {
+        fs::write(package.join("__init__.py"), initializer).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                "GR001,GR005,GR006",
+                "--output-format",
+                "json",
+                "_impl.py",
+            ])
+            .current_dir(&package)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let findings: Value = serde_json::from_slice(&output.stdout).unwrap();
+        for (definition_row, docstring_row) in [(1, 2), (3, 4), (5, 6), (8, 9), (10, 11), (13, 14)]
+        {
+            let public = public_rows.contains(&definition_row);
+            let codes: Vec<&str> = findings
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|finding| {
+                    let row = finding["location"]["row"].as_u64().unwrap();
+                    row == definition_row || row == docstring_row
+                })
+                .map(|finding| finding["code"].as_str().unwrap())
+                .collect();
+            let expected = if public {
+                vec!["GR005"]
+            } else {
+                vec!["GR001", "GR006"]
+            };
+            assert_eq!(
+                codes, expected,
+                "initializer: {initializer}, row: {definition_row}"
+            );
+        }
+    }
+    fs::write(
+        package.join("__init__.py"),
+        "from ._impl import _load as load\n",
+    )
+    .unwrap();
+    fs::write(
+        package.join("_impl.py"),
+        "def _load(path='default'):\n    pass\n_load('chosen')\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--isolated", "--select", "GR002", "_impl.py"])
+        .current_dir(&package)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "public defaults must survive: {output:?}"
+    );
+    fs::write(package.join("__init__.py"), "from ._impl import resize\n").unwrap();
+    for (source, codes) in [
+        (
+            "def resize(image):\n    \"\"\"Replaced function.\"\"\"\nresize = None\n",
+            vec!["GR001", "GR006"],
+        ),
+        (
+            "def resize(image):\n    \"\"\"Annotated function.\"\"\"\nresize: object\n",
+            vec!["GR005"],
+        ),
+        (
+            "from typing import overload\n@overload\ndef resize(image: bytes): ...\n@overload\ndef resize(image: str): ...\ndef resize(image):\n    \"\"\"Public API.\"\"\"\n",
+            vec!["GR005", "GR005", "GR005"],
+        ),
+    ] {
+        fs::write(package.join("_impl.py"), source).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                "GR001,GR005,GR006",
+                "--output-format",
+                "json",
+                "_impl.py",
+            ])
+            .current_dir(&package)
+            .output()
+            .unwrap();
+        let findings: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let actual: Vec<&str> = findings
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|finding| finding["code"].as_str().unwrap())
+            .collect();
+        assert_eq!(actual, codes, "{source}");
+    }
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn recognizes_reexports_from_deeper_packages_and_stubs() {
+    let directory = create_temp_directory("deep-package-reexports");
+    for (extension, initializer_extension) in
+        [("py", "py"), ("pyi", "pyi"), ("py", "pyi"), ("pyi", "py")]
+    {
+        let package = directory.join(format!("pkg_{extension}_{initializer_extension}"));
+        let implementation = package.join("_impl");
+        fs::create_dir_all(&implementation).unwrap();
+        fs::write(
+            package.join(format!("__init__.{initializer_extension}")),
+            "from ._impl.core import resize\n__all__: tuple[str, ...] = ('resize',)\n",
+        )
+        .unwrap();
+        fs::write(
+            implementation.join(format!("__init__.{initializer_extension}")),
+            "",
+        )
+        .unwrap();
+        let source = implementation.join(format!("core.{extension}"));
+        fs::write(&source, "def resize(image):\n    \"\"\"Public API.\"\"\"\n").unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                "GR001,GR005,GR006",
+                "--output-format",
+                "json",
+            ])
+            .arg(&source)
+            .output()
+            .unwrap();
+        let findings: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(findings.as_array().unwrap().len(), 1, "{findings}");
+        assert_eq!(findings[0]["code"], "GR005");
+    }
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn resolves_reexports_through_namespaces_and_package_module_collisions() {
+    let directory = create_temp_directory("reexport-import-resolution");
+    let package = directory.join("ns/pkg");
+    let implementation = package.join("_impl");
+    fs::create_dir_all(&implementation).unwrap();
+    fs::write(
+        package.join("__init__.py"),
+        "from ns.pkg._impl import resize\n",
+    )
+    .unwrap();
+    let module = package.join("_impl.py");
+    let initializer = implementation.join("__init__.py");
+    fs::write(&module, "def resize(image):\n    \"\"\"Module API.\"\"\"\n").unwrap();
+    for collision in [false, true] {
+        if collision {
+            fs::write(
+                &initializer,
+                "def resize(image):\n    \"\"\"Package API.\"\"\"\n",
+            )
+            .unwrap();
+        }
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                "GR001,GR005,GR006",
+                "--output-format",
+                "json",
+            ])
+            .arg(&package)
+            .output()
+            .unwrap();
+        let findings: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let codes = |path: &PathBuf| -> Vec<&str> {
+            findings
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|finding| {
+                    std::path::Path::new(finding["filename"].as_str().unwrap()) == path
+                })
+                .map(|finding| finding["code"].as_str().unwrap())
+                .collect()
+        };
+        assert_eq!(
+            codes(&module),
+            if collision {
+                vec!["GR001", "GR006"]
+            } else {
+                vec!["GR005"]
+            }
+        );
+        if collision {
+            assert_eq!(codes(&initializer), ["GR005"]);
+        }
+    }
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn resolves_reexports_across_namespace_gaps_without_implicit_relative_imports() {
+    let directory = create_temp_directory("reexport-package-roots");
+    let package = directory.join("pkg");
+    fs::create_dir_all(package.join("helpers")).unwrap();
+    let source = "def resize(image):\n    \"\"\"Image API.\"\"\"\n";
+    fs::write(directory.join("_impl.py"), source).unwrap();
+    fs::write(package.join("_impl.py"), source).unwrap();
+    fs::write(package.join("helpers/_impl.py"), source).unwrap();
+    for (initializer, target, expected) in [
+        (
+            "from _impl import resize\n",
+            "_impl.py",
+            vec!["GR001", "GR006"],
+        ),
+        (
+            "from .helpers._impl import resize\n",
+            "helpers/_impl.py",
+            vec!["GR005"],
+        ),
+    ] {
+        fs::write(package.join("__init__.py"), initializer).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                "GR001,GR005,GR006",
+                "--output-format",
+                "json",
+            ])
+            .arg(package.join(target))
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let findings: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let codes: Vec<&str> = findings
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|finding| finding["code"].as_str().unwrap())
+            .collect();
+        assert_eq!(codes, expected, "initializer: {initializer}");
+    }
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn checks_package_dunder_all_findings_locations_output_and_exit_status() {
     let directory = create_temp_directory("package-dunder-all-findings");
     let sources = [
