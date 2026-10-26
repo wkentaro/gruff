@@ -2,17 +2,19 @@
 
 ## What it does
 
-Flags an `if` statement with neither an `elif` nor an `else` that is the last statement directly in a function body (`def` or `async def`, at any nesting depth, including a function nested in another function or in a class) or in a loop body (`for`, `async for`, or `while`), when its suite meets a size gate: the suite spans at least ten physical lines — the last statement's end line minus the first statement's start line, plus one, so interior comments and blank lines count — or it lexically contains an `if` statement at any depth, including inside a nested loop, `with`, or `try`, and inside a function or class defined in the suite. A docstring ahead of the `if` does not disqualify the body. Each qualifying `if` is its own finding, anchored on the `if` keyword and its condition.
-
-Only a direct child of a function or loop body counts, so an `if` at the tail of a `with`, `try`, `except`, `finally`, `else`, or another `if` suite is outside the rule; of two directly nested trailing ifs only the outer one is flagged, and the inner one becomes a direct child, and a finding, once the outer one is inverted. A loop's `else` suite is not a loop body, and module and class bodies are outside the rule entirely, having nothing to return from or continue. So are an `if` that carries an `elif` or an `else`, an `if` that is not the last statement of its body, and a suite under ten lines whose only further branching is a ternary expression or a `match` statement. The rule has no autofix.
+Flags a trailing `if` directly inside a function or loop body when it has no
+`elif` or `else` and its body spans at least ten physical lines or contains
+another `if`. Replace the outer condition with a `return` or `continue` guard.
 
 ## Why
 
-When the tail of a body is one large `if`, the condition that governs it scrolls off the top of the screen and every remaining line carries an extra level of indentation. Inverting it moves the condition to the exit — `if not ready: return` — and the work it guards reads at the level it belongs to, with each further guard stacking flat instead of deeper.
-
-The inversion is always behavior-equivalent here. The condition still evaluates exactly once, walrus bindings included; a bare `return` is valid in a generator and an async generator; and a `continue` does not disturb a `for`/`else`, which runs unless the loop breaks.
+An early guard removes one level of indentation from the remaining work. Readers
+can check the exit condition once, then follow the work without carrying a
+condition from the top of a long block.
 
 ## Example
+
+Return when no record exists, then update the user without the outer nesting:
 
 ```diff
  def sync_user(user):
@@ -33,9 +35,26 @@ The inversion is always behavior-equivalent here. The condition still evaluates 
 +    user.save()
 ```
 
+### Rule scope
+
+Functions include `def` and `async def` at any nesting depth. Loops include `for`,
+`async for`, and `while`. A preceding docstring is allowed. The ten-line count
+runs from the first statement's start to the last statement's end, including
+interior comments and blank lines. A nested `if` anywhere in the suite counts,
+even inside a nested function or class.
+
+Only the last direct statement of a function or loop body qualifies. Module and
+class bodies, loop `else` suites, and the tails of `with`, `try`, `except`,
+`finally`, `else`, or other `if` suites are excluded. Ternary expressions and
+`match` statements do not meet the nested-`if` gate.
+
+For directly nested trailing `if` statements, fix the outer finding and run Gruff
+again; the inner `if` may then qualify. Gruff has no autofix.
+
 ## When to suppress
 
-Invert the condition and let the rest of the body dedent. Where the guard would read worse than the nesting — a negation that needs De Morgan's law to state, or a trailing branch deliberately kept parallel with its sibling branches — keep the shape and say so with `# noqa: GR009 -- reason` on the `if` line:
+Keep the nesting if the guard would be harder to read, for example because it
+needs De Morgan's law over several conditions. Put the reason on the `if` line:
 
 ```python
 def route(request):
@@ -47,4 +66,10 @@ def route(request):
         return render(session)
 ```
 
-The else-after-return shapes belong to Ruff `RET505` through `RET508`, which unwrap the `else` that follows a terminating branch. This rule deliberately skips them: an `if` with an `elif` or an `else` is outside it, so the two never contest the same statement, and running both leaves one flattening the branch that already returns and the other flattening the branch that never did.
+Use `return` in a function and `continue` in a loop. The condition still evaluates
+once, including walrus bindings. A bare `return` also works in generators and
+async generators. `continue` preserves a loop's `else` behavior, which depends
+on whether the loop breaks.
+
+Ruff's `RET505` through `RET508` handle `else` after a terminating branch. GR009
+skips statements with `elif` or `else`, so the rules cover different shapes.

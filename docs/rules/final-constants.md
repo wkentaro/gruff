@@ -2,17 +2,22 @@
 
 ## What it does
 
-Flags simple-name assignments when an uppercase name and a `Final` annotation do not appear together. The rule applies in module, class, and function scopes, including nested control flow.
-
-Enum members, type aliases, chained and unpacking assignments, augmented assignments, loop and context-manager targets, attributes, subscripts, and imports are excluded. The analysis is syntactic: it resolves neither import aliases nor dataflow.
+Flags a simple-name assignment when an uppercase name lacks `Final`, or a `Final`
+annotation has a name that is not uppercase. Applies in module, class, and
+function scopes, including nested control flow.
 
 ## Why
 
-Two spellings compete for the same idea when uppercase names and `Final` annotations drift apart, so a reader cannot tell from a binding whether rebinding it elsewhere is expected. Pairing them gives a constant one spelling that both a human and a type checker read the same way.
+An uppercase name marks a constant for readers. `Final` lets a type checker
+reject rebinding. Using both makes the intent consistent.
 
-`Final` prevents type checkers from accepting rebinding; it does not make mutable contents immutable. A `Final[list[str]]` still permits `append`, so use an immutable value when the contents must not change.
+`Final` does not freeze mutable contents. A `Final[list[str]]` still permits
+`append`; use an immutable value if the contents must not change.
 
 ## Example
+
+Add the missing annotation or uppercase the name. Update references to any
+renamed binding too:
 
 ```diff
  from typing import Final
@@ -23,11 +28,19 @@ Two spellings compete for the same idea when uppercase names and `Final` annotat
 +IMAGE_FORMAT: Final = "png"
 ```
 
+### Rule scope
+
+Enum members, type aliases, chained and unpacking assignments, augmented
+assignments, loop and context-manager targets, attributes, subscripts, and
+imports are excluded. Gruff checks syntax without resolving import aliases or
+dataflow.
+
 ## When to suppress
 
-Fix the finding by default, in whichever direction the binding calls for: add `Final` to a constant, or lowercase a name that is not one.
+Add `Final` to a constant, or lowercase a name that is not one.
 
-Suppress when the spelling follows an external convention the code does not control, such as a name a protocol or framework reads by exact case. Place the directive beside the assigned name, including when the value spans multiple lines:
+Suppress a spelling required by an external protocol or framework. Place the
+reason beside the assigned name, even when the value spans multiple lines:
 
 ```python
 EXTERNAL_NAMES = (  # noqa: GR004 -- public protocol spelling
