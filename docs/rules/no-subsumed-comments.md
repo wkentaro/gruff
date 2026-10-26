@@ -2,17 +2,19 @@
 
 ## What it does
 
-Flags a one-line own-line comment below the first five physical lines when every content word appears in the window it annotates: the next line carrying code, with comments counting as blank, plus the three physical lines after it. Matching ignores stopwords, splits identifiers on camel-case and uppercase parts, applies a small fixed synonym map for check, loop and iteration, and return wording, and reads a window line containing `(` as the token `call`.
-
-Multi-line comment blocks, trailing comments, directives, section dividers, annotation forms — a leading colon, a leading `name:`, or a parenthesized comma list — and comments with fewer than two content words are outside the rule, as are the contents of any string token that begins on an assertion or comparison line.
+Flags a standalone, single-line comment when every content word appears in the
+code it describes. Checks comments below the first five physical lines against
+the next line carrying code and the three physical lines after it.
 
 ## Why
 
-A comment that repeats its statement costs a reader a second pass over the same fact, and it silently goes stale: renaming the code leaves the restatement behind, and nothing catches it. Deleting the comment loses nothing, because the statement below already carries every word of it.
-
-The comments worth keeping are the ones the code cannot state: why a value was chosen, which constraint forces a workaround, what a caller must not assume. Restricting comments to that content makes each surviving one worth stopping for.
+A comment that repeats the code adds another description to read and maintain.
+Keep comments that explain a reason, constraint, or assumption the code cannot
+express.
 
 ## Example
+
+Delete the comment that repeats the lookup below it:
 
 ```diff
  from browser.session import browser_session
@@ -25,11 +27,22 @@ The comments worth keeping are the ones the code cannot state: why a value was c
      await element.click()
 ```
 
+### Rule scope
+
+Comments count as blank lines when locating the first code line. Matching ignores
+stopwords, splits camel-case and uppercase identifier parts, applies a fixed
+synonym map for check, loop, iteration, and return wording, and treats a window
+line containing `(` as the token `call`.
+
+The rule excludes comment blocks, trailing comments, directives, section dividers,
+comments with fewer than two content words, and annotation forms that start with
+`:`, start with `name:`, or contain a parenthesized comma list. It masks string
+tokens that begin on an assertion or comparison line.
+
 ## When to suppress
 
-Delete a comment that restates the statement beneath it, and replace it with the reasoning the statement cannot carry when there is any.
-
-The rule misjudges three shapes: a comment whose words all appear in the code below but which carries a reason the code cannot; a scenario label above a data literal whose strings repeat it, such as `# Choice type with default.` over a `pytest.mark.parametrize` table; and a wrapped assertion whose expected string sits below the comparison line, where the string is no longer masked. A trailing directive is stripped before matching, so a `# noqa` for another rule does not shield a subsumed comment. Suppress with `# noqa: GR007 -- reason`:
+Delete restatements. If the comment explains a reason the code cannot express,
+keep it and suppress the finding:
 
 ```python
 from app.generated import register_generated_client
@@ -40,3 +53,7 @@ telemetry = start_telemetry(settings)
 # Register the generated client  # noqa: GR007 -- required by the code generator
 generated_client = register_generated_client()
 ```
+
+False positives can include scenario labels above data literals, or wrapped
+assertions whose expected string begins below the comparison line. A trailing
+`noqa` for another rule does not exempt the comment; use `noqa: GR007` with a reason.

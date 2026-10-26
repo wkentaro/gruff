@@ -2,17 +2,20 @@
 
 ## What it does
 
-Flags a non-public module-level function or method whose first body statement is a string literal. The rule uses the same non-public definition boundary as `explicit-non-public-input-conventions` (GR001).
-
-Public definitions, nested functions, methods of a class defined inside a function, and ordinary comments are outside the rule. The finding points at the docstring literal, and Gruff does not rewrite the source.
+Flags docstrings on non-public module-level functions and methods. Uses the same
+[non-public scope](explicit-non-public-input-conventions.md#rule-scope) as GR001.
+Public definitions, nested functions, methods of classes defined inside functions,
+and ordinary comments are excluded.
 
 ## Why
 
-A docstring on a non-public definition usually restates the name, so a reader pays for a second description that no one is obliged to keep true. Carrying the purpose in the name instead keeps one description, and the compiler-visible one at that: a rename moves it, while a stale docstring survives every rename.
-
-If a definition is unclear without its docstring, the name is the thing to fix. Non-obvious reasoning that the name cannot carry belongs in an ordinary comment inside the definition.
+A docstring that repeats a function's name adds a second description to maintain.
+Prefer a name that states the purpose. Put reasoning that a name cannot explain
+in a comment inside the definition.
 
 ## Example
+
+Remove the docstring when the name already explains the function:
 
 ```diff
  def _load_config(*, path: Path) -> Config:
@@ -20,11 +23,18 @@ If a definition is unclear without its docstring, the name is the thing to fix. 
      return Config.parse(path.read_text())
 ```
 
+### Rule scope
+
+A docstring is a string literal at the start of the body. The finding points at
+the literal. Gruff has no autofix.
+
 ## When to suppress
 
-Remove a docstring that restates the name, and rename the definition when removing the docstring would leave it unclear.
+Rename a definition if removing its docstring would leave its purpose unclear.
 
-Suppress when a definition inherits a documentation contract it does not control, such as a framework hook that reads `__doc__`. The suppression belongs on the logical end line of the docstring: after a single-line docstring, or after the closing quotes of a multiline one:
+Suppress when an external framework requires the docstring, for example by
+reading `__doc__`. Put the suppression after the single-line docstring or the
+closing quotes of a multiline docstring:
 
 ```python
 def _documented_hook() -> None:

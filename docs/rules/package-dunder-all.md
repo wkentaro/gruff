@@ -2,17 +2,21 @@
 
 ## What it does
 
-Flags a package initializer when a successfully completing import path leaves a binding whose name does not start with an underscore without `__all__`. The rule covers `__init__.py` and `__init__.pyi`, including bindings in module-level control flow, and reports at most one finding per file.
-
-Empty, underscore-prefixed-only, type-checking-only, and statically false paths do not require a manifest. The analysis is module-local: it never imports or executes the checked package.
+Flags a package initializer that binds a name without a leading `_` but does not
+bind `__all__` on every successfully completing import path. Covers `__init__.py`
+and `__init__.pyi`, with at most one finding per file.
 
 ## Why
 
-A package initializer without `__all__` leaves its public surface implicit, so a reader has to guess which imported names are re-exports and which are incidental. An explicit manifest states the surface once, in the file that owns it.
+`__all__` tells readers which names a package exports. Without it, an imported
+name could be a re-export or an implementation detail.
 
-The rule only requires the manifest to exist; its contents stay with Ruff. `F401` then flags re-exports missing from the manifest, `F822` finds manifest names that are not defined, and `RUF022` sorts it.
+Gruff checks that `__all__` exists. Ruff checks its contents with `F401` for
+unlisted imports, `F822` for undefined names, and `RUF022` for sorting.
 
 ## Example
+
+In `__init__.py`, list the names the package exports:
 
 ```diff
  from .client import Client
@@ -21,11 +25,17 @@ The rule only requires the manifest to exist; its contents stay with Ruff. `F401
 +__all__ = ["Client", "GruffError"]
 ```
 
+### Rule scope
+
+Bindings inside module-level control flow count. Empty, underscore-prefixed-only,
+type-checking-only, and statically false paths do not need `__all__`. Gruff
+analyzes the source without importing or executing the package.
+
 ## When to suppress
 
-Fix the finding by default: adding the manifest is a one-line edit that also unlocks the Ruff rules above.
-
-Suppress only when a package builds its manifest dynamically, so deterministic source analysis cannot see it. Place the suppression on the reported binding whose name does not start with an underscore and state why:
+Add `__all__` for exports you control. Suppress when a package builds it
+dynamically and source analysis cannot see the declaration. Put the reason on
+the reported binding:
 
 ```python
 public = load_exports()  # noqa: GR003 -- exec() defines __all__ below
