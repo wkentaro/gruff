@@ -23,7 +23,7 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
                 .as_expr_stmt()?;
             Some(Diagnostic {
                 message: format!(
-                    "Remove docstring from non-public definition `{}`; rename it if its purpose is unclear",
+                    "Remove docstring from non-public definition `{}`; carry its purpose in the name and any reasoning in a comment",
                     definition.name
                 ),
                 range: docstring.value.range(),

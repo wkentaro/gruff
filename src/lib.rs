@@ -1249,7 +1249,7 @@ def resize(image): ...
         assert_eq!(findings.len(), 1);
         assert_eq!(
             findings[0].message,
-            "Remove docstring from non-public definition `_load`; rename it if its purpose is unclear"
+            "Remove docstring from non-public definition `_load`; carry its purpose in the name and any reasoning in a comment"
         );
         assert_eq!(findings[0].location.row, 2);
         assert_eq!(findings[0].location.column, 5);
