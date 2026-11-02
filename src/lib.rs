@@ -41,10 +41,20 @@ struct Rule {
     code: &'static str,
     name: &'static str,
     summary: &'static str,
+    tier: Tier,
     #[serde(rename = "explanation")]
     document: &'static str,
     #[serde(skip)]
     check: RuleCheck,
+}
+
+// Adoption cost, so a project can start where few would disagree.
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum Tier {
+    Baseline,
+    Opinionated,
+    ApiShaping,
 }
 
 #[derive(Clone, Copy)]
@@ -60,6 +70,7 @@ const RULES: &[Rule] = &[
         code: rules::explicit_non_public_input_conventions::CODE,
         name: rules::explicit_non_public_input_conventions::NAME,
         summary: rules::explicit_non_public_input_conventions::SUMMARY,
+        tier: Tier::Opinionated,
         document: include_str!("../docs/rules/explicit-non-public-input-conventions.md"),
         check: RuleCheck::Ast(rules::explicit_non_public_input_conventions::check),
     },
@@ -67,6 +78,7 @@ const RULES: &[Rule] = &[
         code: rules::no_uniform_non_public_defaults::CODE,
         name: rules::no_uniform_non_public_defaults::NAME,
         summary: rules::no_uniform_non_public_defaults::SUMMARY,
+        tier: Tier::Baseline,
         document: include_str!("../docs/rules/no-uniform-non-public-defaults.md"),
         check: RuleCheck::Ast(rules::no_uniform_non_public_defaults::check),
     },
@@ -74,6 +86,7 @@ const RULES: &[Rule] = &[
         code: rules::package_dunder_all::CODE,
         name: rules::package_dunder_all::NAME,
         summary: rules::package_dunder_all::SUMMARY,
+        tier: Tier::Baseline,
         document: include_str!("../docs/rules/package-dunder-all.md"),
         check: RuleCheck::Ast(rules::package_dunder_all::check),
     },
@@ -81,6 +94,7 @@ const RULES: &[Rule] = &[
         code: rules::final_constants::CODE,
         name: rules::final_constants::NAME,
         summary: rules::final_constants::SUMMARY,
+        tier: Tier::Baseline,
         document: include_str!("../docs/rules/final-constants.md"),
         check: RuleCheck::Ast(rules::final_constants::check),
     },
@@ -88,6 +102,7 @@ const RULES: &[Rule] = &[
         code: rules::explicit_public_input_conventions::CODE,
         name: rules::explicit_public_input_conventions::NAME,
         summary: rules::explicit_public_input_conventions::SUMMARY,
+        tier: Tier::ApiShaping,
         document: include_str!("../docs/rules/explicit-public-input-conventions.md"),
         check: RuleCheck::Ast(rules::explicit_public_input_conventions::check),
     },
@@ -95,6 +110,7 @@ const RULES: &[Rule] = &[
         code: rules::no_non_public_docstrings::CODE,
         name: rules::no_non_public_docstrings::NAME,
         summary: rules::no_non_public_docstrings::SUMMARY,
+        tier: Tier::Opinionated,
         document: include_str!("../docs/rules/no-non-public-docstrings.md"),
         check: RuleCheck::Ast(rules::no_non_public_docstrings::check),
     },
@@ -102,6 +118,7 @@ const RULES: &[Rule] = &[
         code: rules::no_subsumed_comments::CODE,
         name: rules::no_subsumed_comments::NAME,
         summary: rules::no_subsumed_comments::SUMMARY,
+        tier: Tier::Baseline,
         document: include_str!("../docs/rules/no-subsumed-comments.md"),
         check: RuleCheck::Tokens(rules::no_subsumed_comments::check),
     },
@@ -109,6 +126,7 @@ const RULES: &[Rule] = &[
         code: rules::no_exception_swallowing_tests::CODE,
         name: rules::no_exception_swallowing_tests::NAME,
         summary: rules::no_exception_swallowing_tests::SUMMARY,
+        tier: Tier::Baseline,
         document: include_str!("../docs/rules/no-exception-swallowing-tests.md"),
         check: RuleCheck::Ast(rules::no_exception_swallowing_tests::check),
     },
@@ -116,6 +134,7 @@ const RULES: &[Rule] = &[
         code: rules::no_guarded_tails::CODE,
         name: rules::no_guarded_tails::NAME,
         summary: rules::no_guarded_tails::SUMMARY,
+        tier: Tier::Opinionated,
         document: include_str!("../docs/rules/no-guarded-tails.md"),
         check: RuleCheck::SourceAst(rules::no_guarded_tails::check),
     },
@@ -123,6 +142,7 @@ const RULES: &[Rule] = &[
         code: rules::positive_branch_conditions::CODE,
         name: rules::positive_branch_conditions::NAME,
         summary: rules::positive_branch_conditions::SUMMARY,
+        tier: Tier::Opinionated,
         document: include_str!("../docs/rules/positive-branch-conditions.md"),
         check: RuleCheck::Ast(rules::positive_branch_conditions::check),
     },
@@ -130,6 +150,7 @@ const RULES: &[Rule] = &[
         code: rules::no_single_consumer_module_bindings::CODE,
         name: rules::no_single_consumer_module_bindings::NAME,
         summary: rules::no_single_consumer_module_bindings::SUMMARY,
+        tier: Tier::Opinionated,
         document: include_str!("../docs/rules/no-single-consumer-module-bindings.md"),
         check: RuleCheck::Ast(rules::no_single_consumer_module_bindings::check),
     },
@@ -137,6 +158,7 @@ const RULES: &[Rule] = &[
         code: rules::explicit_instance_data::CODE,
         name: rules::explicit_instance_data::NAME,
         summary: rules::explicit_instance_data::SUMMARY,
+        tier: Tier::Opinionated,
         document: include_str!("../docs/rules/explicit-instance-data.md"),
         check: RuleCheck::Ast(rules::explicit_instance_data::check),
     },
