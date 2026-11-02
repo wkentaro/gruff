@@ -3,6 +3,7 @@ use std::process::ExitCode;
 use clap::Parser;
 
 fn main() -> ExitCode {
+    let unused_canary = 1;
     let arguments = gruff::Arguments::parse();
 
     match gruff::run(arguments) {
