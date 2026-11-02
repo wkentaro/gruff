@@ -2584,9 +2584,10 @@ fn selects_rules_by_tier() {
     };
 
     assert_eq!(codes(&["--select", "GR:baseline"]), ["GR004"]);
+    // GR013 supersedes GR001 when both are enabled.
     assert_eq!(
         codes(&["--select", "GR:baseline,GR:opinionated"]),
-        ["GR004", "GR001", "GR013"]
+        ["GR004", "GR013"]
     );
     // A tier narrows `GR`, and a code narrows a tier.
     assert_eq!(
