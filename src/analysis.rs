@@ -187,6 +187,7 @@ pub(crate) struct Input<'a> {
     pub(crate) name: &'a str,
     pub(crate) range: TextRange,
     pub(crate) is_positional_or_keyword: bool,
+    pub(crate) is_keyword_only: bool,
     pub(crate) is_required: bool,
 }
 
@@ -216,6 +217,7 @@ pub(crate) fn classify_inputs<'a>(
             name: parameter.name().as_str(),
             range: parameter.name().range,
             is_positional_or_keyword,
+            is_keyword_only: false,
             is_required: parameter.default.is_none(),
         })
         .chain(
@@ -227,6 +229,7 @@ pub(crate) fn classify_inputs<'a>(
                     name: parameter.name().as_str(),
                     range: parameter.name().range,
                     is_positional_or_keyword: false,
+                    is_keyword_only: true,
                     is_required: parameter.default.is_none(),
                 }),
         )

@@ -36,6 +36,9 @@ mod analysis;
 mod exports;
 mod rules;
 
+use rules::explicit_non_public_input_conventions as gr001;
+use rules::keyword_only_non_public_inputs as gr013;
+
 #[derive(Serialize)]
 struct Rule {
     code: &'static str,
@@ -49,7 +52,7 @@ struct Rule {
 }
 
 // Adoption cost, so a project can start where few would disagree.
-#[derive(Serialize)]
+#[derive(Clone, Copy, PartialEq, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 enum Tier {
     Baseline,
@@ -161,6 +164,14 @@ const RULES: &[Rule] = &[
         tier: Tier::Opinionated,
         document: include_str!("../docs/rules/explicit-instance-data.md"),
         check: RuleCheck::Ast(rules::explicit_instance_data::check),
+    },
+    Rule {
+        code: rules::keyword_only_non_public_inputs::CODE,
+        name: rules::keyword_only_non_public_inputs::NAME,
+        summary: rules::keyword_only_non_public_inputs::SUMMARY,
+        tier: Tier::Opinionated,
+        document: include_str!("../docs/rules/keyword-only-non-public-inputs.md"),
+        check: RuleCheck::Ast(rules::keyword_only_non_public_inputs::check),
     },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
@@ -445,6 +456,7 @@ fn run_check(arguments: CheckArguments) -> Result<u8, RunError> {
     let mut findings = Vec::new();
     let has_files = !files.is_empty();
     let mut is_rule_enabled_anywhere = false;
+    let mut is_overlap_resolved = false;
 
     for path in files {
         let config = resolve_config(
@@ -461,6 +473,12 @@ fn run_check(arguments: CheckArguments) -> Result<u8, RunError> {
                 enabled_rules.push(rule);
             }
         }
+        // GR013 flags every input GR001 flags, so GR001 would only add duplicates.
+        let has_rule = |code| enabled_rules.iter().any(|rule| rule.code == code);
+        if has_rule(gr013::CODE) && has_rule(gr001::CODE) {
+            enabled_rules.retain(|rule| rule.code != gr001::CODE);
+            is_overlap_resolved = true;
+        }
         findings.extend(check_file(&path, &enabled_rules)?);
     }
 
@@ -471,6 +489,16 @@ fn run_check(arguments: CheckArguments) -> Result<u8, RunError> {
         }
     }
 
+    if is_overlap_resolved {
+        eprintln!(
+            "warning: `{}` ({}) and `{}` ({}) overlap. Ignoring {}.",
+            gr001::NAME,
+            gr001::CODE,
+            gr013::NAME,
+            gr013::CODE,
+            gr001::CODE,
+        );
+    }
     if !is_rule_enabled_anywhere {
         eprintln!("warning: No rules are enabled; no policy analysis was performed");
     }
@@ -722,14 +750,32 @@ fn validate_rules(rules: &[String]) -> Result<(), RunError> {
 
 fn is_rule_selector(selector: &str) -> bool {
     selector == "ALL"
+        || parse_tier_selector(selector).is_some()
         || (!selector.is_empty() && RULES.iter().any(|rule| rule.code.starts_with(selector)))
 }
+
+fn parse_tier_selector(selector: &str) -> Option<Tier> {
+    Tier::from_str(selector.strip_prefix("GR:")?, false).ok()
+}
+
+// Code prefixes count twice their length so a tier sits between `GR` and `GR0`: it narrows `GR`,
+// and any prefix naming specific codes narrows it.
+const TIER_SPECIFICITY: usize = "GR".len() * 2 + 1;
 
 fn get_rule_specificity(selectors: &[String], code: &str) -> Option<usize> {
     selectors
         .iter()
-        .filter(|selector| **selector == "ALL" || code.starts_with(selector.as_str()))
-        .map(|selector| if selector == "ALL" { 0 } else { selector.len() })
+        .filter_map(|selector| {
+            if selector == "ALL" {
+                return Some(0);
+            }
+            if let Some(tier) = parse_tier_selector(selector) {
+                let rule = RULES.iter().find(|rule| rule.code == code)?;
+                return (rule.tier == tier).then_some(TIER_SPECIFICITY);
+            }
+            code.starts_with(selector.as_str())
+                .then_some(selector.len() * 2)
+        })
         .max()
 }
 
@@ -1063,15 +1109,16 @@ fn make_absolute_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    // GR013 is the stricter alternative to GR001, and `gruff check` drops GR001 when both are
+    // enabled. These fixtures exercise GR001, and GR013 has its own tests.
     fn check_all_rules(path: &Path, source: &str) -> Vec<Finding> {
-        check_source(path, source, &RULES.iter().collect::<Vec<_>>())
+        let rules: Vec<&Rule> = RULES.iter().filter(|rule| rule.code != "GR013").collect();
+        check_source(path, source, &rules)
     }
 
     fn check_rule(source: &str, code: &str) -> Vec<Finding> {
-        check_all_rules(Path::new("test.py"), source)
-            .into_iter()
-            .filter(|finding| finding.code == code)
-            .collect()
+        let rules: Vec<&Rule> = RULES.iter().filter(|rule| rule.code == code).collect();
+        check_source(Path::new("test.py"), source, &rules)
     }
 
     #[test]
@@ -1170,6 +1217,41 @@ def resize(image): ...
                 "Input `fake_device` must be positional-only or keyword-only",
                 "Input `fake_device` must be positional-only or keyword-only",
                 "Input `image` must be positional-only or keyword-only",
+            ]
+        );
+    }
+
+    #[test]
+    fn reports_non_public_inputs_that_are_not_keyword_only() {
+        let source = "\
+def _resize(data, /, width, *, mode): ...
+
+
+class _Cache:
+    def _get(self, key, *, default): ...
+
+    @staticmethod
+    def _make(size): ...
+
+
+@pytest.fixture
+def _image(tmp_path): ...
+
+
+def resize(data, width): ...
+";
+        let messages: Vec<String> = check_rule(source, "GR013")
+            .into_iter()
+            .map(|finding| finding.message)
+            .collect();
+
+        assert_eq!(
+            messages,
+            [
+                "Input `data` must be keyword-only",
+                "Input `width` must be keyword-only",
+                "Input `key` must be keyword-only",
+                "Input `size` must be keyword-only",
             ]
         );
     }

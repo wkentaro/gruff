@@ -15,6 +15,10 @@ GR001 covers non-public definitions. [GR005](explicit-public-input-conventions.m
 applies the same policy to public definitions, so projects can adopt each scope
 separately. A non-public name can still implement an external callback contract.
 
+For a stricter alternative that requires every non-public input to be
+keyword-only, see [GR013](keyword-only-non-public-inputs.md). When both are
+enabled, gruff ignores GR001 and prints a warning.
+
 ## Example
 
 Keep image data positional and require the caller to name the width:
