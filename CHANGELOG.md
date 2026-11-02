@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.2.1 - 2026-11-02
+
+### Added
+
+- Classify every rule as baseline, opinionated, or API-shaping, emit the tier from `gruff rule --output-format json`, and start the quick start with the baseline rules. ([#100](https://github.com/wkentaro/gruff/pull/100))
+- Add GR013 `keyword-only-non-public-inputs`, an opinionated rule that requires every non-public input to be keyword-only. When GR001 and GR013 are both enabled, gruff ignores GR001 and prints a warning. ([#104](https://github.com/wkentaro/gruff/pull/104))
+- Select a whole tier with `GR:baseline`, `GR:opinionated`, or `GR:api-shaping` in `select`, `ignore`, and per-file ignores. ([#105](https://github.com/wkentaro/gruff/pull/105))
+- Add GR014 `no-non-public-imports`, a baseline rule that flags a non-public name imported from another module of the same project. ([#110](https://github.com/wkentaro/gruff/pull/110))
+
+### Changed
+
+- GR006 findings now say to keep reasoning in a comment, so following the message no longer deletes an explanation. ([#101](https://github.com/wkentaro/gruff/pull/101))
+- GR001 and GR005 skip tests, pytest fixtures and hooks, click and typer commands, pydantic validators, and web routes, since a framework decides how their inputs are passed. ([#102](https://github.com/wkentaro/gruff/pull/102))
+- GR007 now also flags narration whose verb names an `assert`, a call, or an `append` in the code below it, such as `# Verify the result` above an `assert`. ([#114](https://github.com/wkentaro/gruff/pull/114))
+
 ## 0.2.0 - 2026-10-26
 
 ### Changed
