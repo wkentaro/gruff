@@ -53,7 +53,7 @@ The first release tests eleven theses: inputs are easier to trace when definitio
 
 ### Baseline
 
-Few projects disagree with these rules, and fixing a finding changes code in one module only.
+Few projects disagree with these rules. A fix usually stays inside one module, but GR004 can rename a constant that other code imports.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
@@ -65,7 +65,7 @@ Few projects disagree with these rules, and fixing a finding changes code in one
 
 ### Opinionated
 
-These rules take a style position that some projects reject. Fixing a finding changes code inside the project but not how outside code calls it.
+These rules take a style position that some projects reject. A fix usually stays inside the project, but GR012's getter-only property fix stops outside code from assigning the attribute.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
