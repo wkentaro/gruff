@@ -24,20 +24,11 @@ pub(crate) fn public_reexports(path: &Path, statements: &[Stmt]) -> HashSet<Stri
     let Ok(path) = path.canonicalize() else {
         return HashSet::new();
     };
-    let packages: Vec<_> = path
-        .ancestors()
-        .skip(1)
-        .filter(|directory| {
-            directory.join("__init__.py").is_file() || directory.join("__init__.pyi").is_file()
-        })
-        .collect();
+    let packages = find_packages(&path);
     let Some(import_root) = packages.last().and_then(|package| package.parent()) else {
         return HashSet::new();
     };
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or("py");
+    let extension = get_extension(&path);
     let mut exports = HashSet::new();
     // shortcut: follow direct ancestor-package imports; add forwarding-module resolution when needed.
     for (index, directory) in packages.iter().enumerate() {
@@ -49,11 +40,7 @@ pub(crate) fn public_reexports(path: &Path, statements: &[Stmt]) -> HashSet<Stri
         }) {
             continue;
         }
-        let Some(initializer) = [extension, "py", "pyi"]
-            .into_iter()
-            .map(|extension| directory.join(format!("__init__.{extension}")))
-            .find(|initializer| initializer.is_file())
-        else {
+        let Some(initializer) = find_initializer(directory, extension) else {
             continue;
         };
         let Ok(source) = fs::read_to_string(initializer) else {
@@ -125,16 +112,36 @@ pub(crate) fn public_reexports(path: &Path, statements: &[Stmt]) -> HashSet<Stri
     exports
 }
 
-fn imported_file(base: &Path, module: &str, extension: &str) -> Option<PathBuf> {
+// Every ancestor directory with an initializer, innermost first; the parent of the last one is
+// the import root.
+pub(crate) fn find_packages(path: &Path) -> Vec<&Path> {
+    path.ancestors()
+        .skip(1)
+        .filter(|directory| {
+            directory.join("__init__.py").is_file() || directory.join("__init__.pyi").is_file()
+        })
+        .collect()
+}
+
+pub(crate) fn get_extension(path: &Path) -> &str {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("py")
+}
+
+pub(crate) fn find_initializer(directory: &Path, extension: &str) -> Option<PathBuf> {
+    [extension, "py", "pyi"]
+        .into_iter()
+        .map(|extension| directory.join(format!("__init__.{extension}")))
+        .find(|initializer| initializer.is_file())
+}
+
+pub(crate) fn imported_file(base: &Path, module: &str, extension: &str) -> Option<PathBuf> {
     let mut path = base.to_path_buf();
     let mut parts = module.split('.').peekable();
     while let Some(part) = parts.next() {
         path.push(part);
-        let initializer = [extension, "py", "pyi"]
-            .into_iter()
-            .map(|extension| path.join(format!("__init__.{extension}")))
-            .find(|initializer| initializer.is_file());
-        if let Some(initializer) = initializer {
+        if let Some(initializer) = find_initializer(&path, extension) {
             if parts.peek().is_none() {
                 return initializer.canonicalize().ok();
             }
