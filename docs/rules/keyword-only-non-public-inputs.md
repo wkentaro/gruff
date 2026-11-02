@@ -15,8 +15,8 @@ no compatibility.
 
 GR013 is stricter than [GR001](explicit-non-public-input-conventions.md), which
 also accepts positional-only parameters. A keyword-only parameter satisfies
-both rules. Enable one of them: with both, a positional-or-keyword parameter
-gets a finding from each.
+both rules. When both are enabled, GR001 would only repeat GR013's findings, so
+gruff ignores GR001 and prints a warning.
 
 ## Example
 

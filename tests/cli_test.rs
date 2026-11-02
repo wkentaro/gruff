@@ -1506,8 +1506,8 @@ fn splits_input_convention_rules_under_prefix_selection() {
         .expect("gruff should run");
     assert_eq!(output.status.code(), Some(1));
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
-    // GR013 also flags both non-public inputs, because their noqa comments name only GR001 and
-    // GR002.
+    // GR013 flags both non-public inputs, because their noqa comments name only GR001 and GR002.
+    // With GR013 enabled, GR001 would only repeat its findings, so gruff drops GR001.
     let codes = |findings: &Value| -> Vec<String> {
         findings
             .as_array()
@@ -1516,11 +1516,13 @@ fn splits_input_convention_rules_under_prefix_selection() {
             .map(|finding| finding["code"].as_str().unwrap().to_owned())
             .collect()
     };
-    assert_eq!(
-        codes(&findings),
-        ["GR005", "GR002", "GR013", "GR001", "GR013"]
-    );
+    assert_eq!(codes(&findings), ["GR005", "GR002", "GR013", "GR013"]);
     assert_eq!(findings[0]["name"], "explicit-public-input-conventions");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "warning: `explicit-non-public-input-conventions` (GR001) and \
+         `keyword-only-non-public-inputs` (GR013) overlap. Ignoring GR001.\n"
+    );
 
     let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
         .args(["check", "--select", "ALL", "."])
@@ -1528,10 +1530,7 @@ fn splits_input_convention_rules_under_prefix_selection() {
         .output()
         .expect("gruff should run");
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
-    assert_eq!(
-        codes(&findings),
-        ["GR005", "GR002", "GR013", "GR001", "GR013"]
-    );
+    assert_eq!(codes(&findings), ["GR005", "GR002", "GR013", "GR013"]);
 
     let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
         .args(["check", "--ignore", "GR001", "."])
@@ -1540,6 +1539,16 @@ fn splits_input_convention_rules_under_prefix_selection() {
         .expect("gruff should run");
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
     assert_eq!(codes(&findings), ["GR005", "GR002", "GR013", "GR013"]);
+    assert!(output.stderr.is_empty());
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--ignore", "GR013", "."])
+        .current_dir(&directory)
+        .output()
+        .expect("gruff should run");
+    let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
+    assert_eq!(codes(&findings), ["GR005", "GR002", "GR001"]);
+    assert!(output.stderr.is_empty());
 
     let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
         .args(["check", "--select", "GR005", "."])
@@ -2559,7 +2568,7 @@ fn follows_ruff_selector_specificity() {
     fs::write(&path, "def _load(path):\n    ...\n").expect("finding source should be written");
 
     let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
-        .args(["check", "--select", "GR", path.to_str().unwrap()])
+        .args(["check", "--select", "GR00", path.to_str().unwrap()])
         .output()
         .expect("gruff should run");
     assert_eq!(output.status.code(), Some(1));
