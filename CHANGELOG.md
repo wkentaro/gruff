@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.2.2 - 2026-11-02
+
+### Changed
+
+- GR001, GR005, and GR013 skip methods decorated with `override`, whose signature their base class declares. ([#116](https://github.com/wkentaro/gruff/pull/116))
+
+### Fixed
+
+- GR003 now names the public bindings that need `__all__` and says "on some import paths" only when another completing path is fine. ([#115](https://github.com/wkentaro/gruff/pull/115))
+
 ## 0.2.1 - 2026-11-02
 
 ### Added
