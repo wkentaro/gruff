@@ -463,6 +463,36 @@ fn checks_no_subsumed_comments_boundaries_synonyms_and_suppression() {
             true,
         ),
         (
+            "synonym_verify_assert.py",
+            "# Verify the result\nassert result\n",
+            true,
+            true,
+        ),
+        (
+            "synonym_check_assert.py",
+            "# Check tool calls\nassert len(tool_calls) == 1\n",
+            true,
+            true,
+        ),
+        (
+            "synonym_create_call.py",
+            "# Create the agent\nagent = Agent(task=task)\n",
+            true,
+            true,
+        ),
+        (
+            "synonym_create_without_call.py",
+            "# Create the cache\ncache = {}\n",
+            false,
+            true,
+        ),
+        (
+            "synonym_add_append.py",
+            "# Add the image\nparts.append(image)\n",
+            true,
+            true,
+        ),
+        (
             "suppressed.py",
             "# Get the element  # noqa: GR007\nelement = get_element()\n",
             false,

@@ -68,7 +68,9 @@ fn find_window_lines(lines: &[String], comment_line_index: usize) -> impl Iterat
 fn is_subsumed(words: &[String], code_tokens: &HashSet<String>) -> bool {
     words.iter().all(|word| {
         code_tokens.contains(word)
-            || get_synonym(word).is_some_and(|synonym| code_tokens.contains(synonym))
+            || get_synonyms(word)
+                .iter()
+                .any(|synonym| code_tokens.contains(*synonym))
     })
 }
 
@@ -205,11 +207,15 @@ fn add_identifier_parts(word: &str, tokens: &mut HashSet<String>) {
     );
 }
 
-fn get_synonym(word: &str) -> Option<&'static str> {
+fn get_synonyms(word: &str) -> &'static [&'static str] {
     match word {
-        "check" | "checks" | "checking" => Some("if"),
-        "loop" | "loops" | "looping" | "iterate" | "iterates" | "iterating" => Some("for"),
-        "returns" | "returning" => Some("return"),
-        _ => None,
+        "check" | "checks" | "checking" => &["if", "assert"],
+        "verify" | "verifies" | "verifying" => &["assert"],
+        "loop" | "loops" | "looping" | "iterate" | "iterates" | "iterating" => &["for"],
+        "returns" | "returning" => &["return"],
+        "create" | "creates" | "creating" | "initialize" | "initializes" | "initializing"
+        | "get" | "gets" | "getting" => &["call"],
+        "add" | "adds" | "adding" => &["append"],
+        _ => &[],
     }
 }
