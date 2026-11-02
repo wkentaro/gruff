@@ -1,0 +1,5 @@
+# Add keyword-only non-public inputs
+
+GR013 flags every non-public input that a caller can pass by position. GR001 accepts both `/` and `*`, so a project that wants every private call to name its arguments had no rule to enforce it. ADR 0005 gives an independently adoptable variant its own code, so this is a new rule instead of an option on GR001. Gruff has no per-rule options, and selecting a code stays the only way to choose a policy.
+
+GR013 is stricter than GR001: a keyword-only input satisfies both, and a project enables one of them. It checks the same definitions as GR001, including the framework-invoked skip from ADR 0018, which GR013 depends on: a framework that passes arguments by position, such as a pydantic validator, could not satisfy it otherwise. A callback passed as an argument, such as a click `callback=` or a `sorted` key, still needs an inline suppression. On osam GR013 reports 87 findings, the same as GR001, because osam has no positional-only inputs; one of them is a click callback.
