@@ -32,22 +32,47 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     }
 
     let is_stub = file_name.ends_with(".pyi");
-    let range = analyze_suite(statements, vec![State::default()], is_stub)
+    let paths: Vec<_> = analyze_suite(statements, vec![State::default()], is_stub)
         .into_iter()
         .filter(|state| state.flow == Flow::Normal)
-        .filter_map(|state| state.find_bad_path_range())
-        .min_by_key(|range| range.start());
+        // A path that raises before completing yields `None` and does not count.
+        .filter_map(|state| state.find_public_bindings_without_all())
+        .collect();
+    let bad_paths: Vec<_> = paths
+        .iter()
+        .filter(|bindings| !bindings.is_empty())
+        .collect();
+    let Some((bindings, range)) = bad_paths
+        .iter()
+        .filter_map(|bindings| Some((bindings, bindings.first()?.1)))
+        .min_by_key(|(_, range)| range.start())
+    else {
+        return Vec::new();
+    };
 
-    range
-        .map(|range| Diagnostic {
-            message:
-                "Package initializer with public bindings must define __all__ on every import path"
-                    .to_owned(),
-            range,
-            noqa_offset: None,
-        })
-        .into_iter()
-        .collect()
+    let names: Vec<_> = bindings
+        .iter()
+        .take(3)
+        .map(|(name, _)| format!("`{name}`"))
+        .collect();
+    let listed = if bindings.len() > 3 {
+        format!("{} and {} more", names.join(", "), bindings.len() - 3)
+    } else {
+        names.join(", ")
+    };
+    let noun = if bindings.len() == 1 { "name" } else { "names" };
+    let scope = if bad_paths.len() < paths.len() {
+        " on some import paths"
+    } else {
+        ""
+    };
+    vec![Diagnostic {
+        message: format!(
+            "Package initializer binds public {noun} {listed} without `__all__`{scope}"
+        ),
+        range,
+        noqa_offset: None,
+    }]
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -118,7 +143,9 @@ impl State {
             .insert(binding.name.to_owned(), kind);
     }
 
-    fn find_bad_path_range(&self) -> Option<TextRange> {
+    // The public bindings of a completing path that lacks `__all__`, in source order, or `None`
+    // when the path raises a `NameError` before completing.
+    fn find_public_bindings_without_all(&self) -> Option<Vec<(String, TextRange)>> {
         let mut history = Vec::new();
         let mut operation = self.history.as_deref();
         while let Some(current) = operation {
@@ -141,14 +168,16 @@ impl State {
             }
         }
         if bindings.contains_key("__all__") {
-            return None;
+            return Some(Vec::new());
         }
 
-        bindings
+        let mut public: Vec<_> = bindings
             .into_iter()
             .filter(|(name, _)| !name.starts_with('_'))
-            .map(|(_, range)| range)
-            .min_by_key(|range| range.start())
+            .map(|(name, range)| (name.to_owned(), range))
+            .collect();
+        public.sort_by_key(|(_, range)| range.start());
+        Some(public)
     }
 }
 
