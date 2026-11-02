@@ -19,7 +19,7 @@ the patch.
 
 To release version `X.Y.Z`:
 
-1. Run `make release VERSION=X.Y.Z`; it sets the version in `Cargo.toml` and
+1. Run `just release X.Y.Z`; it sets the version in `Cargo.toml` and
    `pyproject.toml`, syncs `Cargo.lock` (the release build is `--locked`), and
    builds `CHANGELOG.md` from the fragments.
 1. Commit the updated changelog and deleted fragments, then tag that commit.
