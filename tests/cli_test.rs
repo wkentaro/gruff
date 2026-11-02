@@ -3069,6 +3069,12 @@ fn resolves_explicit_config_patterns_from_current_directory() {
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }
 
+fn get_section<'a>(document: &'a str, heading: &str) -> &'a str {
+    let start = document.find(heading).expect("heading should exist") + heading.len();
+    let rest = &document[start..];
+    &rest[..rest.find("\n#").unwrap_or(rest.len())]
+}
+
 #[test]
 fn binds_every_rule_to_its_doc_and_tables() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -3114,17 +3120,23 @@ fn binds_every_rule_to_its_doc_and_tables() {
             document.ends_with('\n'),
             "{name}.md should end with a newline"
         );
+        let heading = match rule["tier"].as_str().unwrap() {
+            "baseline" => "### Baseline\n",
+            "opinionated" => "### Opinionated\n",
+            "api-shaping" => "### API-shaping\n",
+            tier => panic!("unexpected tier {tier} for {code}"),
+        };
         assert!(
-            readme.contains(&format!(
+            get_section(&readme, heading).contains(&format!(
                 "| {code} | [`{name}`](https://wkentaro.github.io/gruff/rules/{name}/) | {summary} |"
             )),
-            "README.md should carry the {code} row"
+            "README.md should carry the {code} row under {heading}"
         );
         assert!(
-            index.contains(&format!(
+            get_section(&index, heading).contains(&format!(
                 "| {code} | [`{name}`](rules/{name}.md) | {summary} |"
             )),
-            "docs/index.md should carry the {code} row"
+            "docs/index.md should carry the {code} row under {heading}"
         );
         let sections: Vec<&str> = document
             .lines()
@@ -3171,7 +3183,7 @@ fn explains_rule_by_code_and_name() {
     // The parsed map is sorted, so this pins the key set rather than the emitted order.
     assert_eq!(
         rule.keys().collect::<Vec<_>>(),
-        ["code", "explanation", "name", "summary"]
+        ["code", "explanation", "name", "summary", "tier"]
     );
     assert_eq!(rule["code"], "GR004");
     assert_eq!(rule["name"], "final-constants");
@@ -3211,6 +3223,7 @@ fn explains_all_rules() {
         .find(|rule| rule["code"] == "GR004")
         .expect("GR004 should be explained");
     assert_eq!(final_constants["name"], "final-constants");
+    assert_eq!(final_constants["tier"], "baseline");
     assert_eq!(
         final_constants["summary"],
         "Uppercase names and `Final` annotations appear together."

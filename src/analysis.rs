@@ -290,6 +290,14 @@ fn is_non_public(
             && *in_non_public_module.get_or_init(|| is_non_public_module(path))))
 }
 
+pub(crate) fn is_test_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            name.ends_with("_test.py") || (name.starts_with("test_") && name.ends_with(".py"))
+        })
+}
+
 pub(crate) fn is_non_public_name(name: &str) -> bool {
     name.starts_with('_') && !name.ends_with('_')
 }

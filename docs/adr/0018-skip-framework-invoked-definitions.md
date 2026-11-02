@@ -1,0 +1,7 @@
+# Skip framework-invoked definitions
+
+GR001 and GR005 skip a definition that a framework calls through a registration: a test function or method in a test file, a `pytest_` hook implementation, or a definition decorated with a known registration decorator from pytest, click, typer, pydantic, FastAPI, Flask, or Starlette. The rules exist so a reader can tell how to call a definition without searching its call sites. A framework-invoked definition has no call site in the project, and the framework already fixes how it passes each input, so declaring `/` or `*` tells the reader nothing new.
+
+On osam, GR001 and GR005 reported 247 findings before this change and 110 after. The 137 skipped findings were pytest tests, fixtures, and hooks, click commands, pydantic validators, and a FastAPI route. The 110 that remain are helpers and public API that the project's own code calls, plus one click callback passed by argument.
+
+Gruff matches the last name of the decorator expression against a fixed list, without resolving imports, so the check stays single-file and deterministic. A same-named decorator from another library is skipped too; the list keeps to names that are rarely reused as decorators. A callback passed as an argument, such as `click.option(callback=...)`, is still checked and takes an inline suppression, because recognizing it needs call-argument tracking. Earlier, the rule docs asked for a suppression on every framework callback; that guidance now covers only callbacks the list does not recognize.

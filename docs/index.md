@@ -32,11 +32,11 @@ gruff --version
 
 ## Quick start
 
-Enable every Gruff rule in `pyproject.toml`:
+Enable the baseline rules in `pyproject.toml`:
 
 ```toml
 [tool.gruff.lint]
-select = ["GR"]
+select = ["GR002", "GR003", "GR004", "GR007", "GR008"]
 ```
 
 Then check the current directory:
@@ -45,27 +45,45 @@ Then check the current directory:
 gruff check .
 ```
 
-All rules are opt-in. Use an exact code such as `GR001` to adopt rules individually; `GR` enables every Gruff rule. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+All rules are opt-in. Each rule belongs to a tier that states what adopting it costs. Start with the baseline rules, then add opinionated rules one code at a time. `GR` enables every Gruff rule, including the API-shaping tier. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
 ## Rules at a glance
 
 The first release tests eleven theses: inputs are easier to trace when definitions declare how callers pass them, non-public behavior is easier to review when callers supply every value, package initializer manifests are easier to review when every public import path defines `__all__`, constants are easier to review when uppercase names and `Final` annotations always appear together, non-public definitions are easier to understand when their names carry their purpose, comments are worth reading when they state more than the code beneath them, tests are worth running when an exception can still fail them, a body is easier to follow when its trailing condition inverts into a guard, a branch is easier to verify when its condition states the positive form, a non-public module binding is easier to find when it lives in the one definition that reads it, and public instance data is easier to review when properties declare its interface.
 
+### Baseline
+
+Few projects disagree with these rules. A fix usually stays inside one module, but GR004 can rename a constant that other code imports.
+
 | Code | Rule | Policy |
 | --- | --- | --- |
-| GR001 | [`explicit-non-public-input-conventions`](rules/explicit-non-public-input-conventions.md) | Every fixed input to a non-public callable has an explicit calling convention. |
 | GR002 | [`no-uniform-non-public-defaults`](rules/no-uniform-non-public-defaults.md) | Some calls in its module pass a module-private default and others omit it. |
 | GR003 | [`package-dunder-all`](rules/package-dunder-all.md) | Every public package import path defines `__all__`. |
 | GR004 | [`final-constants`](rules/final-constants.md) | Uppercase names and `Final` annotations appear together. |
-| GR005 | [`explicit-public-input-conventions`](rules/explicit-public-input-conventions.md) | Every fixed input to a public callable has an explicit calling convention. |
-| GR006 | [`no-non-public-docstrings`](rules/no-non-public-docstrings.md) | Non-public definitions carry their purpose in their names instead of docstrings. |
 | GR007 | [`no-subsumed-comments`](rules/no-subsumed-comments.md) | One-line comments state something beyond the statements they annotate. |
 | GR008 | [`no-exception-swallowing-tests`](rules/no-exception-swallowing-tests.md) | Tests let exceptions propagate instead of swallowing them. |
+
+### Opinionated
+
+These rules take a style position that some projects reject. A fix usually stays inside the project, but GR012's getter-only property fix stops outside code from assigning the attribute.
+
+| Code | Rule | Policy |
+| --- | --- | --- |
+| GR001 | [`explicit-non-public-input-conventions`](rules/explicit-non-public-input-conventions.md) | Every fixed input to a non-public callable has an explicit calling convention. |
+| GR006 | [`no-non-public-docstrings`](rules/no-non-public-docstrings.md) | Non-public definitions carry their purpose in their names instead of docstrings. |
 | GR009 | [`no-guarded-tails`](rules/no-guarded-tails.md) | Trailing conditions invert into guards instead of nesting the rest of the body. |
 | GR010 | [`positive-branch-conditions`](rules/positive-branch-conditions.md) | Branch conditions state the positive form instead of negating around an `else`. |
 | GR011 | [`no-single-consumer-module-bindings`](rules/no-single-consumer-module-bindings.md) | Non-public module bindings live in the one definition that reads them. |
 | GR012 | [`explicit-instance-data`](rules/explicit-instance-data.md) | Public instance data is explicit through class-body annotations or properties. |
 
-Each page above is the rule doc: what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule for tooling.
+### API-shaping
+
+Fixing a finding changes a public signature, which can break callers outside the project. On a published library, adopt these rules with a major release.
+
+| Code | Rule | Policy |
+| --- | --- | --- |
+| GR005 | [`explicit-public-input-conventions`](rules/explicit-public-input-conventions.md) | Every fixed input to a public callable has an explicit calling convention. |
+
+Each page above is the rule doc: what the rule flags, why, an example, and when to suppress. `gruff rule GR004` prints the same document in the terminal, and `gruff rule --all --output-format json` emits every rule and its tier for tooling.
 
 Next: [configuration and the CLI](configuration.md).
