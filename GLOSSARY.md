@@ -24,6 +24,10 @@ _Avoid_: Exported definition, API definition
 A policy requiring every non-receiver, non-variadic input to a module-level function or method to be positional-only or keyword-only, so its calling convention is locally declared and runtime-enforced. A framework-invoked definition, one a framework calls through a registration such as a test, a pytest fixture or hook, a CLI command, a model validator, or a web route, is outside the policy because the framework fixes how its inputs are passed.
 _Avoid_: Kwargs-only definitions, named inputs
 
+**Keyword-only non-public inputs**:
+A stricter form of explicit input calling conventions for non-public definitions that requires every non-receiver, non-variadic input to be keyword-only, so every call names each argument.
+_Avoid_: Kwargs-only definitions, named arguments rule
+
 **Uniform non-public default**:
 A default on a definition whose own name is non-public that every call in its module passes, or that no call in its module passes.
 _Avoid_: Required non-public inputs, unvaried default, unused default

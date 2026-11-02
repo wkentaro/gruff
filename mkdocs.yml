@@ -54,3 +54,4 @@ nav:
       - rules/positive-branch-conditions.md
       - rules/no-single-consumer-module-bindings.md
       - rules/explicit-instance-data.md
+      - rules/keyword-only-non-public-inputs.md

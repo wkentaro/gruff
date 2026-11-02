@@ -1506,11 +1506,21 @@ fn splits_input_convention_rules_under_prefix_selection() {
         .expect("gruff should run");
     assert_eq!(output.status.code(), Some(1));
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
-    assert_eq!(findings.as_array().unwrap().len(), 3);
-    assert_eq!(findings[0]["code"], "GR005");
+    // GR013 also flags both non-public inputs, because their noqa comments name only GR001 and
+    // GR002.
+    let codes = |findings: &Value| -> Vec<String> {
+        findings
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|finding| finding["code"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert_eq!(
+        codes(&findings),
+        ["GR005", "GR002", "GR013", "GR001", "GR013"]
+    );
     assert_eq!(findings[0]["name"], "explicit-public-input-conventions");
-    assert_eq!(findings[1]["code"], "GR002");
-    assert_eq!(findings[2]["code"], "GR001");
 
     let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
         .args(["check", "--select", "ALL", "."])
@@ -1518,10 +1528,10 @@ fn splits_input_convention_rules_under_prefix_selection() {
         .output()
         .expect("gruff should run");
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
-    assert_eq!(findings.as_array().unwrap().len(), 3);
-    assert_eq!(findings[0]["code"], "GR005");
-    assert_eq!(findings[1]["code"], "GR002");
-    assert_eq!(findings[2]["code"], "GR001");
+    assert_eq!(
+        codes(&findings),
+        ["GR005", "GR002", "GR013", "GR001", "GR013"]
+    );
 
     let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
         .args(["check", "--ignore", "GR001", "."])
@@ -1529,9 +1539,7 @@ fn splits_input_convention_rules_under_prefix_selection() {
         .output()
         .expect("gruff should run");
     let findings: Value = serde_json::from_slice(&output.stdout).expect("output should be JSON");
-    assert_eq!(findings.as_array().unwrap().len(), 2);
-    assert_eq!(findings[0]["code"], "GR005");
-    assert_eq!(findings[1]["code"], "GR002");
+    assert_eq!(codes(&findings), ["GR005", "GR002", "GR013", "GR013"]);
 
     let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
         .args(["check", "--select", "GR005", "."])

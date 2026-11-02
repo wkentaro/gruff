@@ -162,6 +162,14 @@ const RULES: &[Rule] = &[
         document: include_str!("../docs/rules/explicit-instance-data.md"),
         check: RuleCheck::Ast(rules::explicit_instance_data::check),
     },
+    Rule {
+        code: rules::keyword_only_non_public_inputs::CODE,
+        name: rules::keyword_only_non_public_inputs::NAME,
+        summary: rules::keyword_only_non_public_inputs::SUMMARY,
+        tier: Tier::Opinionated,
+        document: include_str!("../docs/rules/keyword-only-non-public-inputs.md"),
+        check: RuleCheck::Ast(rules::keyword_only_non_public_inputs::check),
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",
@@ -1063,15 +1071,16 @@ fn make_absolute_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    // GR013 is the stricter alternative to GR001, so a project enables one of them. These
+    // fixtures exercise GR001, and GR013 has its own tests.
     fn check_all_rules(path: &Path, source: &str) -> Vec<Finding> {
-        check_source(path, source, &RULES.iter().collect::<Vec<_>>())
+        let rules: Vec<&Rule> = RULES.iter().filter(|rule| rule.code != "GR013").collect();
+        check_source(path, source, &rules)
     }
 
     fn check_rule(source: &str, code: &str) -> Vec<Finding> {
-        check_all_rules(Path::new("test.py"), source)
-            .into_iter()
-            .filter(|finding| finding.code == code)
-            .collect()
+        let rules: Vec<&Rule> = RULES.iter().filter(|rule| rule.code == code).collect();
+        check_source(Path::new("test.py"), source, &rules)
     }
 
     #[test]
@@ -1170,6 +1179,41 @@ def resize(image): ...
                 "Input `fake_device` must be positional-only or keyword-only",
                 "Input `fake_device` must be positional-only or keyword-only",
                 "Input `image` must be positional-only or keyword-only",
+            ]
+        );
+    }
+
+    #[test]
+    fn reports_non_public_inputs_that_are_not_keyword_only() {
+        let source = "\
+def _resize(data, /, width, *, mode): ...
+
+
+class _Cache:
+    def _get(self, key, *, default): ...
+
+    @staticmethod
+    def _make(size): ...
+
+
+@pytest.fixture
+def _image(tmp_path): ...
+
+
+def resize(data, width): ...
+";
+        let messages: Vec<String> = check_rule(source, "GR013")
+            .into_iter()
+            .map(|finding| finding.message)
+            .collect();
+
+        assert_eq!(
+            messages,
+            [
+                "Input `data` must be keyword-only",
+                "Input `width` must be keyword-only",
+                "Input `key` must be keyword-only",
+                "Input `size` must be keyword-only",
             ]
         );
     }
