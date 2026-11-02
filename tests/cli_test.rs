@@ -15,7 +15,8 @@ fn create_temp_directory(name: &str) -> PathBuf {
         fs::remove_dir_all(&path).expect("stale test directory should be removable");
     }
     fs::create_dir(&path).expect("test directory should be created");
-    path
+    // gruff reports canonical paths, and macOS links the temp directory under /private.
+    fs::canonicalize(path).expect("test directory should be canonicalized")
 }
 
 #[test]
@@ -1611,8 +1612,7 @@ fn treats_definitions_in_non_public_scopes_as_non_public() {
         .map(|finding| {
             let filename = PathBuf::from(finding["filename"].as_str().unwrap());
             let relative = filename
-                .strip_prefix(directory.canonicalize().unwrap())
-                .or_else(|_| filename.strip_prefix(&directory))
+                .strip_prefix(&directory)
                 .unwrap_or(&filename)
                 .to_string_lossy()
                 .into_owned();
