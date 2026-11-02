@@ -1158,7 +1158,7 @@ mod tests {
     }
 
     #[test]
-    fn skips_framework_invoked_definitions_in_input_convention_rules() {
+    fn skips_definitions_with_external_signatures_in_input_convention_rules() {
         let source = "\
 import click
 import pytest
@@ -1194,6 +1194,14 @@ def test_runs(fake_device): ...
 
 class TestRun:
     def test_runs(self, fake_device): ...
+
+
+class Model(Base):
+    @override
+    def generate(self, request): ...
+
+    @typing.override
+    def _encode(self, image): ...
 
 
 @functools.cache

@@ -46,7 +46,7 @@ functions are excluded.
 
 GR005 skips the same
 [framework-invoked definitions](explicit-non-public-input-conventions.md#framework-invoked-definitions)
-as GR001.
+and [overrides](explicit-non-public-input-conventions.md#overrides) as GR001.
 
 ## When to suppress
 

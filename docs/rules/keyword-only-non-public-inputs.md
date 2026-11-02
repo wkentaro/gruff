@@ -36,7 +36,8 @@ Require callers to name the image and the width:
 
 GR013 checks the same definitions as GR001: the
 [non-public scope](explicit-non-public-input-conventions.md#rule-scope), minus
-the [framework-invoked definitions](explicit-non-public-input-conventions.md#framework-invoked-definitions).
+the [framework-invoked definitions](explicit-non-public-input-conventions.md#framework-invoked-definitions)
+and [overrides](explicit-non-public-input-conventions.md#overrides).
 
 ## When to suppress
 
