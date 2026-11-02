@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_call:
 
+concurrency:
+  group: lint-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -15,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
       - uses: extractions/setup-just@4a174aa1487e2bcb3f86a8fe24a05361a4f4fff1
         with:
           just-version: 1.58.0
