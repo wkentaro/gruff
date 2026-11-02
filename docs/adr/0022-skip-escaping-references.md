@@ -1,0 +1,7 @@
+# Skip escaping references
+
+GR001, GR005, and GR013 skip a definition whose name its file reads without calling it, such as `click.option(callback=_load_json)`, `map(_parse, rows)`, `threading.Thread(target=_pull_model)`, or `signal.connect(self._on_click)`. The rules assume the project owns every call site, so it can choose a convention and migrate its callers. A reference that escapes hands the definition to a caller the project cannot change, which fixes how inputs are passed. This replaces ADR 0018's rule that a callback passed as an argument is still checked and takes an inline suppression.
+
+The test is how the file uses the name, not which framework receives it, so it needs no list of argument names such as `callback`. A call, such as `_parse(row)`, and a member access, such as `_load.cache_clear()`, do not escape. On labelme, GR013 reported 370 findings before this change and 254 after. The 116 skipped findings were Qt slots passed to `connect`, thread targets, callbacks passed to widgets, and test helpers listed as parameters. On osam, the one remaining `noqa: GR013`, on a click callback, became unnecessary.
+
+Gruff matches names within one file without resolving scopes, so the check stays single-file and deterministic. A definition that shares its name with any value read in the file is skipped too. A reference passed from another module is not seen, and its definition still takes a suppression.

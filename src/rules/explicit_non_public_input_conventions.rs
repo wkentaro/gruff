@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::Path;
 
 use ruff_python_ast::Expr;
@@ -6,6 +7,7 @@ use ruff_python_ast::StmtFunctionDef;
 
 use super::Diagnostic;
 use crate::analysis::classify_inputs;
+use crate::analysis::find_escaping_names;
 use crate::analysis::find_non_public_definitions;
 use crate::analysis::is_test_file;
 
@@ -15,17 +17,18 @@ pub(crate) const SUMMARY: &str =
     "Every fixed input to a non-public callable has an explicit calling convention.";
 
 pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
-    check_definitions(path, find_non_public_definitions(path, statements))
+    check_definitions(path, statements, find_non_public_definitions)
 }
+
+pub(super) type FindDefinitions = for<'a> fn(&Path, &'a [Stmt]) -> Vec<(&'a StmtFunctionDef, bool)>;
 
 pub(super) fn check_definitions(
     path: &Path,
-    definitions: Vec<(&StmtFunctionDef, bool)>,
+    statements: &[Stmt],
+    find_definitions: FindDefinitions,
 ) -> Vec<Diagnostic> {
-    let is_in_test_file = is_test_file(path);
-    definitions
+    find_own_signatures(path, statements, find_definitions)
         .into_iter()
-        .filter(|(definition, _)| !has_external_signature(definition, is_in_test_file))
         .flat_map(|(definition, is_method)| {
             classify_inputs(definition, is_method)
                 .into_iter()
@@ -71,10 +74,31 @@ const REGISTRATION_DECORATORS: &[&str] = &[
     "websocket",
 ];
 
-// A framework or a base class decides how these inputs are passed, so the definition cannot
-// choose its own convention.
-pub(super) fn has_external_signature(definition: &StmtFunctionDef, is_in_test_file: bool) -> bool {
-    (is_in_test_file && definition.name.starts_with("test"))
+// Keeps the definitions whose inputs the project decides how to pass.
+pub(super) fn find_own_signatures<'a>(
+    path: &Path,
+    statements: &'a [Stmt],
+    find_definitions: FindDefinitions,
+) -> Vec<(&'a StmtFunctionDef, bool)> {
+    let is_in_test_file = is_test_file(path);
+    let escaping_names = find_escaping_names(statements);
+    find_definitions(path, statements)
+        .into_iter()
+        .filter(|(definition, _)| {
+            !has_external_signature(definition, is_in_test_file, &escaping_names)
+        })
+        .collect()
+}
+
+// A framework, a base class, or whatever receives an escaping reference decides how these inputs
+// are passed, so the definition cannot choose its own convention.
+fn has_external_signature(
+    definition: &StmtFunctionDef,
+    is_in_test_file: bool,
+    escaping_names: &HashSet<&str>,
+) -> bool {
+    escaping_names.contains(definition.name.as_str())
+        || (is_in_test_file && definition.name.starts_with("test"))
         // pluggy calls a pytest hook implementation by keyword, matching it by this prefix.
         || definition.name.starts_with("pytest_")
         || definition.decorator_list.iter().any(|decorator| {

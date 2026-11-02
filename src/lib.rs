@@ -1238,6 +1238,68 @@ def resize(image): ...
     }
 
     #[test]
+    fn skips_definitions_whose_references_escape() {
+        let source = "\
+def _load_json(ctx, param, value): ...
+
+
+def _parse(row): ...
+
+
+def _sort_key(item): ...
+
+
+def _retry(function): ...
+
+
+def _clear(cache): ...
+
+
+def _resize(data, width): ...
+
+
+class _Window:
+    def _on_click(self, event): ...
+
+    def _redraw(self, area): ...
+
+    def _bind(self):
+        button.connect(handler=self._on_click)
+        self._redraw(area)
+
+
+option = click.option(\"--prompt\", callback=_load_json)
+rows = list(map(_parse, lines))
+items = sorted(items, key=_sort_key)
+
+
+@_retry
+def run(): ...
+
+
+_clear.cache_clear()
+_clear(cache)
+_resize(data, width)
+";
+        let messages: Vec<String> = check_rule(source, "GR013")
+            .into_iter()
+            .map(|finding| finding.message)
+            .collect();
+
+        // Each escaping definition is handed to a caller the file cannot see. A member access
+        // such as `_clear.cache_clear()` and a direct call leave the definition checked.
+        assert_eq!(
+            messages,
+            [
+                "Input `cache` must be keyword-only",
+                "Input `data` must be keyword-only",
+                "Input `width` must be keyword-only",
+                "Input `area` must be keyword-only",
+            ]
+        );
+    }
+
+    #[test]
     fn reports_non_public_inputs_that_are_not_keyword_only() {
         let source = "\
 def _resize(data, /, width, *, mode): ...

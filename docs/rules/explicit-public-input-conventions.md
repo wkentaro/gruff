@@ -45,8 +45,10 @@ API documentation. Nested functions and methods of classes defined inside
 functions are excluded.
 
 GR005 skips the same
-[framework-invoked definitions](explicit-non-public-input-conventions.md#framework-invoked-definitions)
-and [overrides](explicit-non-public-input-conventions.md#overrides) as GR001.
+[framework-invoked definitions](explicit-non-public-input-conventions.md#framework-invoked-definitions),
+[overrides](explicit-non-public-input-conventions.md#overrides), and
+[escaping references](explicit-non-public-input-conventions.md#escaping-references)
+as GR001.
 
 ## When to suppress
 
