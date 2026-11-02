@@ -44,6 +44,10 @@ classification uses spelling, scope, and recognized exports; it does not require
 API documentation. Nested functions and methods of classes defined inside
 functions are excluded.
 
+GR005 skips the same
+[framework-invoked definitions](explicit-non-public-input-conventions.md#framework-invoked-definitions)
+as GR001.
+
 ## When to suppress
 
 Before enabling GR005 on an existing library, review public and protocol

@@ -1103,6 +1103,78 @@ mod tests {
     }
 
     #[test]
+    fn skips_framework_invoked_definitions_in_input_convention_rules() {
+        let source = "\
+import click
+import pytest
+import pydantic
+from fastapi import FastAPI
+
+app = FastAPI()
+
+
+@pytest.fixture
+def fake_device(tmp_path): ...
+
+
+def pytest_configure(config): ...
+
+
+@click.command()
+def run(model_name): ...
+
+
+@app.get(\"/items\")
+def read_item(item_id): ...
+
+
+class Prompt(pydantic.BaseModel):
+    @pydantic.field_validator(\"points\")
+    @classmethod
+    def _validate_points(cls, points): ...
+
+
+def test_runs(fake_device): ...
+
+
+class TestRun:
+    def test_runs(self, fake_device): ...
+
+
+@functools.cache
+def _load(name): ...
+
+
+def resize(image): ...
+";
+        let flagged = |path: &str| -> Vec<String> {
+            check_all_rules(Path::new(path), source)
+                .into_iter()
+                .filter(|finding| matches!(finding.code.as_str(), "GR001" | "GR005"))
+                .map(|finding| finding.message)
+                .collect()
+        };
+
+        assert_eq!(
+            flagged("test_run.py"),
+            [
+                "Input `name` must be positional-only or keyword-only",
+                "Input `image` must be positional-only or keyword-only",
+            ]
+        );
+        // Outside a test file, a name starting with `test` is an ordinary definition.
+        assert_eq!(
+            flagged("run.py"),
+            [
+                "Input `name` must be positional-only or keyword-only",
+                "Input `fake_device` must be positional-only or keyword-only",
+                "Input `fake_device` must be positional-only or keyword-only",
+                "Input `image` must be positional-only or keyword-only",
+            ]
+        );
+    }
+
+    #[test]
     fn reports_both_rules_for_a_defaulted_positional_input() {
         let findings = check_all_rules(Path::new("test.py"), "def _f(width=512):\n    ...\n_f()\n");
 

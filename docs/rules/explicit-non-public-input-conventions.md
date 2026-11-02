@@ -68,6 +68,25 @@ remain unresolved. Assertions and comparisons may read a literal manifest;
 other reads are unresolved because they can expose it to mutation. Unresolved
 exports retain the name-and-scope classification above.
 
+### Framework-invoked definitions
+
+GR001 and GR005 skip a definition that a framework calls through a registration,
+because no call site in the project shows how its inputs are passed. A skipped
+definition is a `test`-prefixed function or method in a `test_*.py` or
+`*_test.py` file, a `pytest_`-prefixed hook implementation, or a definition with
+a decorator whose last name is one of these:
+
+- pytest: `fixture`
+- click and typer: `command`, `group`, `callback`
+- pydantic: `field_validator`, `field_serializer`, `model_validator`,
+  `model_serializer`, `validator`, `root_validator`
+- FastAPI, Flask, and Starlette: `get`, `post`, `put`, `patch`, `delete`, `head`,
+  `options`, `route`, `api_route`, `websocket`
+
+Gruff matches the decorator's spelling, not its import, so `@cache.get` is
+skipped too. A callback registered by passing it as an argument, such as
+`click.option(callback=_load_json)`, is still checked.
+
 ## When to suppress
 
 Suppress a definition when an external contract requires both call styles.
