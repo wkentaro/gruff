@@ -88,8 +88,8 @@ a decorator whose last name is one of these:
   `options`, `route`, `api_route`, `websocket`
 
 Gruff matches the decorator's spelling, not its import, so `@cache.get` is
-skipped too. A callback registered by passing it as an argument, such as
-`click.option(callback=_load_json)`, is still checked.
+skipped too. A callback registered by passing it as an argument is an
+[escaping reference](#escaping-references).
 
 ### Overrides
 
@@ -100,9 +100,30 @@ class, so change the base method and its overrides together. As with framework
 decorators, Gruff matches the spelling `override` without resolving the import.
 An override without the decorator is still checked.
 
+### Escaping references
+
+GR001 and GR005 also skip a definition whose name its file reads without
+calling it:
+
+```python
+option = click.option("--prompt", callback=_load_json)
+rows = list(map(_parse, lines))
+worker = threading.Thread(target=_pull_model)
+button.clicked.connect(self._on_click)
+```
+
+Each reference hands the definition to a caller outside the project, and that
+caller decides how inputs are passed. A call such as `_parse(row)` and a member
+access such as `_load.cache_clear()` leave the definition checked.
+
+Gruff matches these names within one file without resolving scopes. A
+definition that shares its name with any value the file reads is skipped too,
+and a reference passed from another module is not seen.
+
 ## When to suppress
 
-Suppress a definition when an external contract requires both call styles.
+Suppress a definition when an external contract fixes its call style and Gruff
+cannot see the contract, such as a callback that another module registers.
 Otherwise, choose a convention and migrate its callers.
 
 A type check alone cannot prove callback compatibility. Frameworks may dispatch
@@ -110,7 +131,10 @@ callbacks through `Any` or a callable type that omits their parameters. Test the
 actual registration and dispatch path, and check that the callback ran and
 produced the expected result without errors.
 
-This standard-library scheduler dispatches the same callback both ways:
+This standard-library scheduler dispatches the same callback both ways. Gruff
+skips `_record_event` here, because `action=_record_event` is an
+[escaping reference](#escaping-references). Registered from another module, it
+would need the suppression shown:
 
 ```python
 import sched

@@ -12,5 +12,5 @@ pub(crate) const SUMMARY: &str =
     "Every fixed input to a public callable has an explicit calling convention.";
 
 pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
-    check_definitions(path, find_public_definitions(path, statements))
+    check_definitions(path, statements, find_public_definitions)
 }

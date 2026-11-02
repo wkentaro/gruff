@@ -21,7 +21,7 @@ The complement of a non-public definition, including recognized direct package r
 _Avoid_: Exported definition, API definition
 
 **Explicit input calling conventions**:
-A policy requiring every non-receiver, non-variadic input to a module-level function or method to be positional-only or keyword-only, so its calling convention is locally declared and runtime-enforced. A framework-invoked definition, one a framework calls through a registration such as a test, a pytest fixture or hook, a CLI command, a model validator, or a web route, is outside the policy because the framework fixes how its inputs are passed. A method decorated with `override` is outside it too, because its base class declares the signature.
+A policy requiring every non-receiver, non-variadic input to a module-level function or method to be positional-only or keyword-only, so its calling convention is locally declared and runtime-enforced. A framework-invoked definition, one a framework calls through a registration such as a test, a pytest fixture or hook, a CLI command, a model validator, or a web route, is outside the policy because the framework fixes how its inputs are passed. A method decorated with `override` is outside it too, because its base class declares the signature, and so is a definition whose name its file reads without calling it, such as a callback passed as an argument, because whatever receives it decides how its inputs are passed.
 _Avoid_: Kwargs-only definitions, named inputs
 
 **Keyword-only non-public inputs**:

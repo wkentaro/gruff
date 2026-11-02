@@ -36,20 +36,19 @@ Require callers to name the image and the width:
 
 GR013 checks the same definitions as GR001: the
 [non-public scope](explicit-non-public-input-conventions.md#rule-scope), minus
-the [framework-invoked definitions](explicit-non-public-input-conventions.md#framework-invoked-definitions)
-and [overrides](explicit-non-public-input-conventions.md#overrides).
+the [framework-invoked definitions](explicit-non-public-input-conventions.md#framework-invoked-definitions),
+[overrides](explicit-non-public-input-conventions.md#overrides), and
+[escaping references](explicit-non-public-input-conventions.md#escaping-references).
 
 ## When to suppress
 
-Suppress a definition that other code calls by position, such as a callback
-passed as an argument or a `key=` function for `sorted`:
+Suppress a definition that another module passes as a callback. Gruff checks
+one file at a time, so it cannot see that reference:
 
 ```python
-def _load_json(ctx, param, value):  # noqa: GR013 -- click passes callback arguments by position
+# _handlers.py
+def _on_event(event):  # noqa: GR013 -- app.py registers it as a positional callback
     ...
-
-
-option = click.option("--config", callback=_load_json)
 ```
 
 Adding `*` to such a definition breaks the call that passes arguments by

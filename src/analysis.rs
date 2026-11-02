@@ -8,6 +8,7 @@ use ruff_python_ast::StmtFunctionDef;
 use ruff_python_ast::token::TokenKind;
 use ruff_python_ast::token::Tokens;
 use ruff_python_ast::visitor::Visitor;
+use ruff_python_ast::visitor::walk_expr;
 use ruff_python_ast::visitor::walk_stmt;
 use ruff_source_file::LineIndex;
 use ruff_source_file::OneIndexed;
@@ -396,6 +397,54 @@ impl<'a> Visitor<'a> for DefinitionVisitor<'a, '_> {
                 self.scope = previous_scope;
             }
             _ => walk_stmt(self, statement),
+        }
+    }
+}
+
+// A name read without being called, such as `callback=_load_json` or `map(_parse, rows)`, hands
+// its definition to a caller the file cannot see. Accessing a member, as in `_cache.clear()`,
+// does not.
+pub(crate) fn find_escaping_names(statements: &[Stmt]) -> HashSet<&str> {
+    let mut visitor = EscapingNameVisitor {
+        names: HashSet::new(),
+    };
+    visitor.visit_body(statements);
+    visitor.names
+}
+
+struct EscapingNameVisitor<'a> {
+    names: HashSet<&'a str>,
+}
+
+impl<'a> EscapingNameVisitor<'a> {
+    fn visit_accessed(&mut self, expression: &'a Expr) {
+        match expression {
+            Expr::Name(_) => {}
+            Expr::Attribute(attribute) => self.visit_accessed(&attribute.value),
+            _ => self.visit_expr(expression),
+        }
+    }
+}
+
+impl<'a> Visitor<'a> for EscapingNameVisitor<'a> {
+    fn visit_expr(&mut self, expression: &'a Expr) {
+        match expression {
+            Expr::Call(call) => {
+                self.visit_accessed(&call.func);
+                self.visit_arguments(&call.arguments);
+            }
+            Expr::Attribute(attribute) => {
+                if attribute.ctx.is_load() {
+                    self.names.insert(attribute.attr.as_str());
+                }
+                self.visit_accessed(&attribute.value);
+            }
+            Expr::Name(name) => {
+                if name.ctx.is_load() {
+                    self.names.insert(name.id.as_str());
+                }
+            }
+            _ => walk_expr(self, expression),
         }
     }
 }
