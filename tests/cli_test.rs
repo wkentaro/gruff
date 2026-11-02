@@ -3672,3 +3672,97 @@ fn selects_explicit_instance_data_with_normal_configuration() {
     }
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn reports_non_public_names_imported_from_first_party_modules() {
+    let directory = create_temp_directory("non-public-imports");
+    let package = directory.join("pkg");
+    fs::create_dir_all(package.join("_subpkg")).unwrap();
+    fs::create_dir_all(package.join("_namespace")).unwrap();
+    for (name, source) in [
+        // A module importing from itself keeps the name inside the module.
+        (
+            "__init__.py",
+            "from ._impl import _helper\nfrom . import _helper\nfrom pkg import _helper\n",
+        ),
+        ("_impl.py", "def _helper(): ...\n"),
+        ("a.py", "def _f(): ...\ndef _g(): ...\n"),
+        ("_a.py", "class Foo: ...\n"),
+        ("_sub.py", ""),
+        ("_subpkg/__init__.py", ""),
+    ] {
+        fs::write(package.join(name), source).unwrap();
+    }
+    let source = "\
+from typing import TYPE_CHECKING
+from os import _exit
+from .a import _f
+from pkg.a import _f as f
+from pkg.a import _f, _g
+from pkg import _sub, _subpkg, _namespace
+from . import _helper
+from pkg._a import Foo
+from pkg.a import __version__, _missing_, name_, __x
+from .missing import _f
+from missing import _f
+from pkg.a import _f  # noqa: GR014
+if TYPE_CHECKING:
+    from .a import _g
+def load():
+    from .a import _f
+";
+    for name in ["b.py", "test_b.py", "b_test.py", "conftest.py"] {
+        fs::write(package.join(name), source).unwrap();
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args([
+            "check",
+            "--isolated",
+            "--select",
+            "GR014",
+            "--output-format",
+            "json",
+        ])
+        .arg(&package)
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    let findings: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let findings: Vec<(String, u64, String)> = findings
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|finding| {
+            (
+                PathBuf::from(finding["filename"].as_str().unwrap())
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+                finding["location"]["row"].as_u64().unwrap(),
+                finding["message"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    let expected = [
+        ("__init__.py", 1, "_helper", "._impl"),
+        ("b.py", 3, "_f", ".a"),
+        ("b.py", 4, "_f", "pkg.a"),
+        ("b.py", 5, "_f", "pkg.a"),
+        ("b.py", 5, "_g", "pkg.a"),
+        ("b.py", 7, "_helper", "."),
+        ("b.py", 9, "__x", "pkg.a"),
+        ("b.py", 14, "_g", ".a"),
+        ("b.py", 16, "_f", ".a"),
+    ]
+    .map(|(file, row, name, module)| {
+        (
+            file.to_owned(),
+            row,
+            format!("Non-public name `{name}` is imported from `{module}`; drop the underscore"),
+        )
+    });
+    assert_eq!(findings, expected);
+    fs::remove_dir_all(directory).unwrap();
+}

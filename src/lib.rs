@@ -173,6 +173,14 @@ const RULES: &[Rule] = &[
         document: include_str!("../docs/rules/keyword-only-non-public-inputs.md"),
         check: RuleCheck::Ast(rules::keyword_only_non_public_inputs::check),
     },
+    Rule {
+        code: rules::no_non_public_imports::CODE,
+        name: rules::no_non_public_imports::NAME,
+        summary: rules::no_non_public_imports::SUMMARY,
+        tier: Tier::Baseline,
+        document: include_str!("../docs/rules/no-non-public-imports.md"),
+        check: RuleCheck::Ast(rules::no_non_public_imports::check),
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",
