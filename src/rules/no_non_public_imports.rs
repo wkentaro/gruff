@@ -51,7 +51,11 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
             Some(module) => imported_file(base, module.as_str(), extension),
             None => find_initializer(base, extension),
         };
-        let Some(target) = target.filter(|target| *target != path) else {
+        // The resolver canonicalizes, so a symlink can lead outside the import root.
+        let Some(target) = target.filter(|target| {
+            *target != path
+                && (import.level > 0 || import_root.is_some_and(|root| target.starts_with(root)))
+        }) else {
             continue;
         };
         // A package's own submodules are importable by name; only a package initializer has them.

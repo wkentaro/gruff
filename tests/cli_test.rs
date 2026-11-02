@@ -3711,6 +3711,16 @@ if TYPE_CHECKING:
 def load():
     from .a import _f
 ";
+    // A module that resolves through a symlink to outside the import root is not first-party.
+    #[cfg(unix)]
+    let external = create_temp_directory("non-public-imports-external");
+    #[cfg(unix)]
+    {
+        fs::write(external.join("dependency.py"), "def _helper(): ...\n").unwrap();
+        std::os::unix::fs::symlink(external.join("dependency.py"), package.join("linked.py"))
+            .unwrap();
+        fs::write(package.join("c.py"), "from pkg.linked import _helper\n").unwrap();
+    }
     for name in ["b.py", "test_b.py", "b_test.py", "conftest.py"] {
         fs::write(package.join(name), source).unwrap();
     }
@@ -3765,4 +3775,6 @@ def load():
     });
     assert_eq!(findings, expected);
     fs::remove_dir_all(directory).unwrap();
+    #[cfg(unix)]
+    fs::remove_dir_all(external).unwrap();
 }
