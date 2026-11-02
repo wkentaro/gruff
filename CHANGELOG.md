@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.2.3 - 2026-11-02
+
+### Changed
+
+- GR001, GR005, and GR013 skip a definition whose name its file reads without calling it, such as a callback passed as `callback=_load_json`, since the code that receives it decides how its inputs are passed. ([#120](https://github.com/wkentaro/gruff/pull/120))
+
 ## 0.2.2 - 2026-11-02
 
 ### Changed
