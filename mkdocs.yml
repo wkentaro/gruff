@@ -55,3 +55,4 @@ nav:
       - rules/no-single-consumer-module-bindings.md
       - rules/explicit-instance-data.md
       - rules/keyword-only-non-public-inputs.md
+      - rules/no-non-public-imports.md

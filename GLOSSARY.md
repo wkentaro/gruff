@@ -28,6 +28,10 @@ _Avoid_: Kwargs-only definitions, named inputs
 A stricter form of explicit input calling conventions for non-public definitions that requires every non-receiver, non-variadic input to be keyword-only, so every call names each argument.
 _Avoid_: Kwargs-only definitions, named arguments rule
 
+**Non-public import**:
+A `from` import in a non-test module that names a non-public name from another module of the same project, where the name starts with an underscore, does not end with one, and is not a submodule of the imported package. Underscores in the module path do not count. Test files, named `test_*.py`, `*_test.py`, or `conftest.py`, may import any name.
+_Avoid_: Private import, underscore import
+
 **Uniform non-public default**:
 A default on a definition whose own name is non-public that every call in its module passes, or that no call in its module passes.
 _Avoid_: Required non-public inputs, unvaried default, unused default

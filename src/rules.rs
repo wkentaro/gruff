@@ -6,6 +6,7 @@ pub(crate) mod keyword_only_non_public_inputs;
 pub(crate) mod no_exception_swallowing_tests;
 pub(crate) mod no_guarded_tails;
 pub(crate) mod no_non_public_docstrings;
+pub(crate) mod no_non_public_imports;
 pub(crate) mod no_single_consumer_module_bindings;
 pub(crate) mod no_subsumed_comments;
 pub(crate) mod no_uniform_non_public_defaults;

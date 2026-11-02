@@ -53,7 +53,7 @@ The first release tests eleven theses: inputs are easier to trace when definitio
 
 ### Baseline
 
-Few projects disagree with these rules. A fix usually stays inside one module, but GR004 can rename a constant that other code imports.
+Few projects disagree with these rules. A fix usually stays inside one module, but GR004 can rename a constant that other code imports, and a GR014 fix renames a name across modules.
 
 | Code | Rule | Policy |
 | --- | --- | --- |
@@ -62,6 +62,7 @@ Few projects disagree with these rules. A fix usually stays inside one module, b
 | GR004 | [`final-constants`](rules/final-constants.md) | Uppercase names and `Final` annotations appear together. |
 | GR007 | [`no-subsumed-comments`](rules/no-subsumed-comments.md) | One-line comments state something beyond the statements they annotate. |
 | GR008 | [`no-exception-swallowing-tests`](rules/no-exception-swallowing-tests.md) | Tests let exceptions propagate instead of swallowing them. |
+| GR014 | [`no-non-public-imports`](rules/no-non-public-imports.md) | Non-public names stay inside the module that defines them. |
 
 ### Opinionated
 
