@@ -8,7 +8,7 @@ GR014 `no-non-public-imports` covers the opposite direction, a `_name` that anot
 
 The rule contradicts ADR 0016. That ADR says a project marks privacy once, where it starts, instead of repeating it on every name inside a private module. This rule would require repeating the underscore on every name that only its own module reads, which splits "private to the package" from "private to the module" again.
 
-A trial in #109 counted candidates: ordinary module-level `def`, `class`, and binding names in non-public modules, not listed in `__all__`, not re-exported by an ancestor package, and not imported or read as an attribute by another non-test module.
+The [trial in #109](https://github.com/wkentaro/gruff/issues/109#issuecomment-6569828429), which lists every repository revision and includes the script, counted candidates: ordinary module-level `def`, `class`, and binding names in non-public modules, not listed in `__all__`, not re-exported by an ancestor package, and not imported or read as an attribute by another non-test module.
 
 | Repository | Read only by own module | Read only by tests | Name also appears as text elsewhere |
 | --- | --- | --- | --- |
