@@ -2557,6 +2557,59 @@ def read_suppressed_multiline():
 }
 
 #[test]
+fn selects_rules_by_tier() {
+    let directory = create_temp_directory("tier-selectors");
+    let path = directory.join("finding.py");
+    // GR001 is opinionated, GR004 is baseline, and GR005 is API-shaping.
+    fs::write(
+        &path,
+        "LIMIT = 1\n\ndef _load(path):\n    ...\n\ndef load(path):\n    ...\n",
+    )
+    .expect("finding source should be written");
+    let codes = |arguments: &[&str]| -> Vec<String> {
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args(["check", "--isolated", "--output-format", "json"])
+            .args(arguments)
+            .arg(&path)
+            .output()
+            .expect("gruff should run");
+        let findings: Value =
+            serde_json::from_slice(&output.stdout).expect("output should be JSON");
+        findings
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|finding| finding["code"].as_str().unwrap().to_owned())
+            .collect()
+    };
+
+    assert_eq!(codes(&["--select", "GR:baseline"]), ["GR004"]);
+    assert_eq!(
+        codes(&["--select", "GR:baseline,GR:opinionated"]),
+        ["GR004", "GR001", "GR013"]
+    );
+    // A tier narrows `GR`, and a code narrows a tier.
+    assert_eq!(
+        codes(&["--select", "GR", "--ignore", "GR:opinionated"]),
+        ["GR004", "GR005"]
+    );
+    assert_eq!(
+        codes(&["--select", "GR:opinionated", "--ignore", "GR013"]),
+        ["GR001"]
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+        .args(["check", "--isolated", "--select", "GR:strict"])
+        .arg(&path)
+        .output()
+        .expect("gruff should run");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Unknown rule selector: GR:strict"));
+
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn follows_ruff_selector_specificity() {
     let directory = create_temp_directory("selectors");
     let path = directory.join("finding.py");

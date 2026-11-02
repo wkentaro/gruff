@@ -11,7 +11,7 @@ select = ["GR001", "GR002", "GR003", "GR004", "GR005", "GR006", "GR007", "GR008"
 ignore = []
 ```
 
-`output-format` accepts `full`, `concise`, `json`, or `github`. Rule selectors accept an exact code, the `GR` prefix, or `ALL`; the more specific selector wins when `select` and `ignore` overlap, and `ignore` wins ties.
+`output-format` accepts `full`, `concise`, `json`, or `github`. Rule selectors accept an exact code, a code prefix such as `GR` or `GR01`, a tier (`GR:baseline`, `GR:opinionated`, or `GR:api-shaping`), or `ALL`; the more specific selector wins when `select` and `ignore` overlap, and `ignore` wins ties. A tier is more specific than `GR` and less specific than any longer prefix, so `select = ["GR"]` with `ignore = ["GR:api-shaping"]` drops GR005, and `select = ["GR:opinionated"]` with `ignore = ["GR013"]` drops GR013 alone.
 
 ## Command line
 

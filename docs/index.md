@@ -36,7 +36,7 @@ Enable the baseline rules in `pyproject.toml`:
 
 ```toml
 [tool.gruff.lint]
-select = ["GR002", "GR003", "GR004", "GR007", "GR008"]
+select = ["GR:baseline"]
 ```
 
 Then check the current directory:
@@ -45,7 +45,7 @@ Then check the current directory:
 gruff check .
 ```
 
-All rules are opt-in. Each rule belongs to a tier that states what adopting it costs. Start with the baseline rules, then add opinionated rules one code at a time. `GR` enables every Gruff rule, including the API-shaping tier. A check with no enabled rules succeeds but warns that it performed no policy analysis.
+All rules are opt-in. Each rule belongs to a tier that states what adopting it costs. Start with the baseline rules, then add opinionated rules one code at a time. `GR:baseline`, `GR:opinionated`, and `GR:api-shaping` select a whole tier. `GR` enables every Gruff rule, including the API-shaping tier. A check with no enabled rules succeeds but warns that it performed no policy analysis.
 
 ## Rules at a glance
 

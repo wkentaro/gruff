@@ -52,7 +52,7 @@ struct Rule {
 }
 
 // Adoption cost, so a project can start where few would disagree.
-#[derive(Serialize)]
+#[derive(Clone, Copy, PartialEq, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 enum Tier {
     Baseline,
@@ -750,14 +750,32 @@ fn validate_rules(rules: &[String]) -> Result<(), RunError> {
 
 fn is_rule_selector(selector: &str) -> bool {
     selector == "ALL"
+        || parse_tier_selector(selector).is_some()
         || (!selector.is_empty() && RULES.iter().any(|rule| rule.code.starts_with(selector)))
 }
+
+fn parse_tier_selector(selector: &str) -> Option<Tier> {
+    Tier::from_str(selector.strip_prefix("GR:")?, false).ok()
+}
+
+// Code prefixes count twice their length so a tier sits between `GR` and `GR0`: it narrows `GR`,
+// and any prefix naming specific codes narrows it.
+const TIER_SPECIFICITY: usize = "GR".len() * 2 + 1;
 
 fn get_rule_specificity(selectors: &[String], code: &str) -> Option<usize> {
     selectors
         .iter()
-        .filter(|selector| **selector == "ALL" || code.starts_with(selector.as_str()))
-        .map(|selector| if selector == "ALL" { 0 } else { selector.len() })
+        .filter_map(|selector| {
+            if selector == "ALL" {
+                return Some(0);
+            }
+            if let Some(tier) = parse_tier_selector(selector) {
+                let rule = RULES.iter().find(|rule| rule.code == code)?;
+                return (rule.tier == tier).then_some(TIER_SPECIFICITY);
+            }
+            code.starts_with(selector.as_str())
+                .then_some(selector.len() * 2)
+        })
         .max()
 }
 
