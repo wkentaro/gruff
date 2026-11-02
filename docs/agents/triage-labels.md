@@ -1,31 +1,36 @@
 # Triage labels
 
-Labels record whose turn it is and what must happen next. A fresh issue has no triage label and is ready for an agent to route. Once triaged, each issue carries exactly one triage label and one type label.
+Labels record whose turn it is and what must happen next. This file maps each `/triage` role to the label string an agent applies.
+
+| Role | Issue label | PR label |
+| --- | --- | --- |
+| `bug` | `type:bug` | none; the conventional-commit title carries the type |
+| `enhancement` | `type:feature`, or `type:task` for maintenance, refactors, docs, and other work | none; the conventional-commit title carries the type |
+| `needs-triage` | `needs-triage` | `recommend-triage` |
+| `needs-info` | `needs-info` | `recommend-revise` |
+| `ready-for-agent` | `ready-for-agent` | no verdict label on a non-draft PR |
+| `ready-for-human` | `ready-for-human` | `recommend-merge` |
+| `wontfix` | `wontfix` | `recommend-close` |
 
 ## Issues
 
-| Standard role | Tracker label | Meaning |
-| --- | --- | --- |
-| `needs-triage` | `needs-triage` | A maintainer must evaluate the issue |
-| `needs-info` | `needs-info` | Waiting on the reporter for more information |
-| `ready-for-agent` | `ready-for-agent` | Fully specified and ready for an AFK agent |
-| `ready-for-human` | `ready-for-human` | Requires human implementation |
-| `wontfix` | `wontfix` | Will not be actioned |
-
-Use exactly one type label: `type: bug` for defects, `type: feature` for new capabilities or improvements, or `type: task` for maintenance, refactors, documentation, and other work.
+An unlabeled issue is untriaged. `needs-triage` means a maintainer is evaluating it and has not routed it yet. A triaged issue carries exactly one `type:` label and one triage state.
 
 ## Pull requests
 
-A draft PR is still being built. A non-draft PR without a verdict is ready for an agent to finalize. A PR waiting on an outside human uses `needs-info`.
+The draft flag means the PR is still being built; no label says that. A non-draft PR with no verdict is the agent's to finalize.
 
-Once finalized, a PR carries exactly one agent verdict:
+The agent sets at most one verdict per head:
 
 | Verdict | Meaning |
 | --- | --- |
 | `recommend-merge` | The agent endorses the PR for maintainer review and merge |
-| `recommend-close` | The agent actively recommends closing it because of a named technical, scope, abandonment, or supersession reason |
+| `recommend-close` | The agent recommends closing it for a named technical, scope, abandonment, or supersession reason |
 | `recommend-triage` | The code is sound, but a maintainer must make the product or scope decision |
+| `recommend-revise` | The review found defects or open questions, and the author must revise and push |
 
-`maintainer-approved` is a separate, human-only verdict: it records that a maintainer reviewed this head and approves merging after required checks pass. Apply it only at the maintainer's explicit direction. It may coexist with an agent verdict because the labels record decisions by different authorities.
+`recommend-revise` hands the PR back to its author. The other three hand it to the maintainer.
 
-Verdicts record decisions, not merge or close actions; agents do not merge or close PRs, and required checks remain authoritative. A new commit makes either authority's verdict stale; remove it and have that authority review the new diff before renewing it.
+`maintainer-approved` is a separate, human-only verdict. It records that a maintainer reviewed this head and approves merging after required checks pass. Apply it only at the maintainer's explicit direction. It may coexist with a `recommend-*` label because the two labels record decisions by different authorities.
+
+Verdicts are recommendations. Agents never merge or close PRs, and required checks stay authoritative. Never rename `recommend-merge` to `ready-to-merge`, because merge bots watch that string. A new push makes any verdict stale, and the authority that set it clears it and reviews the new diff before renewing it.
