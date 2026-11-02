@@ -25,7 +25,7 @@ pub(super) fn check_definitions(
     let is_in_test_file = is_test_file(path);
     definitions
         .into_iter()
-        .filter(|(definition, _)| !is_framework_invoked(definition, is_in_test_file))
+        .filter(|(definition, _)| !has_external_signature(definition, is_in_test_file))
         .flat_map(|(definition, is_method)| {
             classify_inputs(definition, is_method)
                 .into_iter()
@@ -71,13 +71,18 @@ const REGISTRATION_DECORATORS: &[&str] = &[
     "websocket",
 ];
 
-pub(super) fn is_framework_invoked(definition: &StmtFunctionDef, is_in_test_file: bool) -> bool {
+// A framework or a base class decides how these inputs are passed, so the definition cannot
+// choose its own convention.
+pub(super) fn has_external_signature(definition: &StmtFunctionDef, is_in_test_file: bool) -> bool {
     (is_in_test_file && definition.name.starts_with("test"))
         // pluggy calls a pytest hook implementation by keyword, matching it by this prefix.
         || definition.name.starts_with("pytest_")
         || definition.decorator_list.iter().any(|decorator| {
-            get_decorator_name(&decorator.expression)
-                .is_some_and(|name| REGISTRATION_DECORATORS.contains(&name))
+            get_decorator_name(&decorator.expression).is_some_and(|name| {
+                // `override`, from typing or typing_extensions, marks a method whose signature
+                // its base class declares.
+                name == "override" || REGISTRATION_DECORATORS.contains(&name)
+            })
         })
 }
 

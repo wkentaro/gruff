@@ -91,6 +91,15 @@ Gruff matches the decorator's spelling, not its import, so `@cache.get` is
 skipped too. A callback registered by passing it as an argument, such as
 `click.option(callback=_load_json)`, is still checked.
 
+### Overrides
+
+GR001 and GR005 also skip a method decorated with `override`, from `typing` or
+`typing_extensions`, because its base class declares the signature. Changing
+the convention in an override alone would break callers that use the base
+class, so change the base method and its overrides together. As with framework
+decorators, Gruff matches the spelling `override` without resolving the import.
+An override without the decorator is still checked.
+
 ## When to suppress
 
 Suppress a definition when an external contract requires both call styles.
