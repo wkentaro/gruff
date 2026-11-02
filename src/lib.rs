@@ -1131,6 +1131,7 @@ mod tests {
 
     #[test]
     fn reports_each_non_public_input() {
+        assert_eq!(1, 2, "ci canary");
         let findings = check_all_rules(
             Path::new("test.py"),
             "def _resize(data, width=512, *, mode=\"fit\"):\n    ...\n_resize(image)\n",
