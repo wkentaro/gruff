@@ -2115,6 +2115,10 @@ fn checks_package_dunder_all_findings_locations_output_and_exit_status() {
             "with _manager() as context_public:\n    pass\n",
         ),
         (
+            "raising-path/__init__.py",
+            "if condition:\n    del missing\npublic = 1\n",
+        ),
+        (
             "finally-binding/__init__.py",
             "try:\n    pass\nfinally:\n    finalized = 1\n",
         ),
@@ -2148,25 +2152,43 @@ fn checks_package_dunder_all_findings_locations_output_and_exit_status() {
     for finding in findings.as_array().unwrap() {
         assert_eq!(finding["code"], "GR003");
         assert_eq!(finding["name"], "package-dunder-all");
-        assert_eq!(
-            finding["message"],
-            "Package initializer with public bindings must define __all__ on every import path"
+        assert!(
+            finding["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("Package initializer binds public name")
         );
         assert_eq!(finding["severity"], "error");
     }
-    let aggregator = findings
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|finding| {
-            finding["filename"]
-                .as_str()
-                .unwrap()
-                .ends_with("aggregator/__init__.py")
-        })
-        .unwrap();
+    let find = |relative_path: &str| {
+        findings
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|finding| {
+                finding["filename"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with(relative_path)
+            })
+            .unwrap()
+    };
+    let aggregator = find("aggregator/__init__.py");
     assert_eq!(aggregator["location"]["row"], 1);
     assert_eq!(aggregator["location"]["column"], 28);
+    assert_eq!(
+        aggregator["message"],
+        "Package initializer binds public names `Public`, `other` without `__all__`"
+    );
+    assert_eq!(
+        find("path/__init__.py")["message"],
+        "Package initializer binds public name `alternate` without `__all__` on some import paths"
+    );
+    // The `del` path raises `NameError`, so the only completing path lacks `__all__`.
+    assert_eq!(
+        find("raising-path/__init__.py")["message"],
+        "Package initializer binds public name `public` without `__all__`"
+    );
 
     fs::remove_dir_all(directory).expect("test directory should be removed");
 }
