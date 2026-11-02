@@ -11,17 +11,14 @@ use ruff_text_size::TextRange;
 use ruff_text_size::TextSize;
 
 use super::Diagnostic;
+use crate::analysis::is_test_file;
 
 pub(crate) const CODE: &str = "GR008";
 pub(crate) const NAME: &str = "no-exception-swallowing-tests";
 pub(crate) const SUMMARY: &str = "Tests let exceptions propagate instead of swallowing them.";
 
 pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
-    if !path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(is_test_file_name)
-    {
+    if !is_test_file(path) {
         return Vec::new();
     }
 
@@ -32,11 +29,6 @@ pub(crate) fn check(path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     };
     visitor.visit_body(statements);
     visitor.diagnostics
-}
-
-fn is_test_file_name(file_name: &str) -> bool {
-    file_name.ends_with("_test.py")
-        || (file_name.starts_with("test_") && file_name.ends_with(".py"))
 }
 
 // A leading docstring describes the handler rather than doing anything, so it never decides
