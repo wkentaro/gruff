@@ -31,8 +31,10 @@ Delete the comment that repeats the lookup below it:
 
 Comments count as blank lines when locating the first code line. Matching ignores
 stopwords, splits camel-case and uppercase identifier parts, applies a fixed
-synonym map for check, loop, iteration, and return wording, and treats a window
-line containing `(` as the token `call`.
+synonym map, and treats a window line containing `(` as the token `call`. The
+map lets check wording match `if` or `assert`, verify wording match `assert`,
+loop and iterate wording match `for`, return wording match `return`, create,
+initialize, and get wording match `call`, and add wording match `append`.
 
 The rule excludes comment blocks, trailing comments, directives, section dividers,
 comments with fewer than two content words, and annotation forms that start with
