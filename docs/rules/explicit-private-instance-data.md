@@ -80,6 +80,9 @@ GR015 is opt-in and has no autofix. Gruff does not infer the type to declare.
   annotation without a default works alongside `__slots__`.
 - A recognized setter permits writes to a private property, and a getter-only
   private property rejects them, as in GR012.
+- A declaration does not show that anything assigns the field. ty accepts a
+  read of a declared attribute that no code has stored yet, so neither ty nor
+  GR015 catches a read before the first store.
 
 ## When to suppress
 
