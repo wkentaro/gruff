@@ -1,5 +1,6 @@
 pub(crate) mod explicit_instance_data;
 pub(crate) mod explicit_non_public_input_conventions;
+pub(crate) mod explicit_private_instance_data;
 pub(crate) mod explicit_public_input_conventions;
 pub(crate) mod final_constants;
 pub(crate) mod keyword_only_non_public_inputs;

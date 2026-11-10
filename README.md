@@ -77,6 +77,7 @@ These rules take a style position that some projects reject. A fix usually stays
 | GR011 | [`no-single-consumer-module-bindings`](https://wkentaro.github.io/gruff/rules/no-single-consumer-module-bindings/) | Non-public module bindings live in the one definition that reads them. |
 | GR012 | [`explicit-instance-data`](https://wkentaro.github.io/gruff/rules/explicit-instance-data/) | Public instance data is explicit through class-body annotations or properties. |
 | GR013 | [`keyword-only-non-public-inputs`](https://wkentaro.github.io/gruff/rules/keyword-only-non-public-inputs/) | Every fixed input to a non-public callable is keyword-only. |
+| GR015 | [`explicit-private-instance-data`](https://wkentaro.github.io/gruff/rules/explicit-private-instance-data/) | Private instance data is declared through class-body annotations. |
 
 ### API-shaping
 

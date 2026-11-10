@@ -3672,6 +3672,114 @@ fn checks_explicit_instance_data_conformance_cases() {
 }
 
 #[test]
+fn checks_explicit_private_instance_data_conformance_cases() {
+    let directory = create_temp_directory("explicit-private-instance-data");
+    let cases: &[(&str, &str, &[&str])] = &[
+        (
+            "undeclared",
+            "class Backend:\n    def __init__(self):\n        self._lock = Lock()\n        self._timeout: float = 1.0\n    def close(self):\n        self._closed: bool\n        self._closed = True\n",
+            &["_lock", "_timeout", "_closed", "_closed"],
+        ),
+        (
+            "declared",
+            "class Backend:\n    _lock: Lock\n    _timeout: float = 1.0\n    _process: \"_Process | None\"\n    def __init__(self):\n        self._lock = Lock()\n        self._timeout = 2.0\n        self._process = None\n    def restart(self):\n        self._process, self._lock = start(), Lock()\n",
+            &[],
+        ),
+        (
+            "public_names",
+            "class Backend:\n    def __init__(self):\n        self.value = 1\n",
+            &[],
+        ),
+        (
+            "dunder_and_mangled",
+            "class Backend:\n    __state: int\n    def __init__(self):\n        self.__dict__ = {}\n        self.__class__ = Other\n        self.__state = 1\n        self.__other = 2\n        self._sunder_ = 3\n        self._trailing_ = 4\n",
+            &["__other"],
+        ),
+        (
+            "class_variables",
+            "class Backend:\n    _shared: ClassVar[int] = 0\n    _default = 1\n    def update(self):\n        self._shared = 1\n        self._default = 2\n",
+            &["_shared", "_default"],
+        ),
+        (
+            "slots",
+            "class Backend:\n    __slots__ = ('_declared', '_slot_only')\n    _declared: int\n    def __init__(self):\n        self._declared = 1\n        self._slot_only = 2\n",
+            &["_slot_only"],
+        ),
+        (
+            "properties",
+            "class Backend:\n    @property\n    def _value(self):\n        return 1\n    @property\n    def _other(self):\n        return self._storage\n    @_other.setter\n    def _other(self, value):\n        self._storage = value\n    def update(self):\n        self._value = 2\n        self._other = 3\n",
+            &["_storage", "_value"],
+        ),
+        (
+            "non_instance_methods",
+            "class Backend:\n    @staticmethod\n    def build(self):\n        self._value = 1\n    @classmethod\n    def create(cls):\n        cls._value = 1\n    def __new__(cls):\n        cls._value = 1\n",
+            &[],
+        ),
+        (
+            "inherited_declaration",
+            "class Base:\n    _value: int\nclass Backend(Base):\n    def update(self):\n        self._value = 1\n",
+            &["_value"],
+        ),
+        (
+            "suppression",
+            "class Backend:\n    def update(self):\n        self._value = 1  # noqa: GR015 -- declared by Base\n        self._other = 2  # noqa: GR012\n",
+            &["_other"],
+        ),
+    ];
+    for (name, source, expected) in cases {
+        let path = directory.join(format!("{name}.py"));
+        fs::write(&path, source).expect("conformance source should be written");
+        let output = Command::new(env!("CARGO_BIN_EXE_gruff"))
+            .args([
+                "check",
+                "--isolated",
+                "--select",
+                "GR012,GR015",
+                "--output-format",
+                "json",
+            ])
+            .arg(&path)
+            .output()
+            .expect("gruff should run");
+        assert!(output.stderr.is_empty(), "{name}: {:?}", output.stderr);
+        let findings: Value =
+            serde_json::from_slice(&output.stdout).expect("output should be JSON");
+        let findings = findings.as_array().unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(i32::from(!findings.is_empty())),
+            "{name}"
+        );
+        // `public_names` gets GR012's finding, not GR015's.
+        let findings: Vec<&Value> = findings
+            .iter()
+            .filter(|finding| finding["code"] == "GR015")
+            .collect();
+        assert_eq!(findings.len(), expected.len(), "{name}: {findings:?}");
+        for (finding, attribute) in findings.iter().zip(*expected) {
+            assert_eq!(finding["name"], "explicit-private-instance-data");
+            assert_eq!(
+                finding["message"],
+                if *attribute == "_value" && *name == "properties" {
+                    format!(
+                        "Write to getter-only property `{attribute}`; declare a setter for intentional writes."
+                    )
+                } else {
+                    format!(
+                        "Private instance data field `{attribute}` is implicit; declare it with an annotation in the class body."
+                    )
+                }
+            );
+            assert!(finding["fix"].is_null());
+            let row = finding["location"]["row"].as_u64().unwrap() as usize;
+            let column = finding["location"]["column"].as_u64().unwrap() as usize;
+            assert!(source.lines().nth(row - 1).unwrap()[column - 1..].starts_with(attribute));
+        }
+    }
+    fs::remove_dir_all(directory).expect("test directory should be removed");
+}
+
+#[test]
 fn selects_explicit_instance_data_with_normal_configuration() {
     let directory = create_temp_directory("explicit-instance-data-selection");
     let source = "class Result:\n    def __init__(self):\n        self.value = 1\n";

@@ -181,6 +181,14 @@ const RULES: &[Rule] = &[
         document: include_str!("../docs/rules/no-non-public-imports.md"),
         check: RuleCheck::Ast(rules::no_non_public_imports::check),
     },
+    Rule {
+        code: rules::explicit_private_instance_data::CODE,
+        name: rules::explicit_private_instance_data::NAME,
+        summary: rules::explicit_private_instance_data::SUMMARY,
+        tier: Tier::Opinionated,
+        document: include_str!("../docs/rules/explicit-private-instance-data.md"),
+        check: RuleCheck::Ast(rules::explicit_private_instance_data::check),
+    },
 ];
 const DEFAULT_EXCLUDES: &[&str] = &[
     ".bzr",
