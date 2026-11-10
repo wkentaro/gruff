@@ -14,6 +14,7 @@ pub(crate) const SUMMARY: &str = "Uppercase names and `Final` annotations appear
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
     let mut visitor = FinalConstantVisitor {
+        is_class_body: false,
         is_enum_body: false,
         diagnostics: Vec::new(),
     };
@@ -53,6 +54,7 @@ fn is_enum_class(class: &StmtClassDef) -> bool {
 }
 
 struct FinalConstantVisitor {
+    is_class_body: bool,
     is_enum_body: bool,
     diagnostics: Vec<Diagnostic>,
 }
@@ -87,6 +89,7 @@ impl FinalConstantVisitor {
 
 impl<'a> Visitor<'a> for FinalConstantVisitor {
     fn visit_stmt(&mut self, statement: &'a Stmt) {
+        let previous_is_class_body = self.is_class_body;
         let previous_is_enum_body = self.is_enum_body;
         match statement {
             Stmt::Assign(assignment) if !self.is_enum_body => {
@@ -94,16 +97,29 @@ impl<'a> Visitor<'a> for FinalConstantVisitor {
                     self.check_binding(name, None);
                 }
             }
+            // A class-body `Final` with no value declares an instance attribute that
+            // `__init__` assigns, so it follows instance naming, not constant naming.
+            Stmt::AnnAssign(assignment)
+                if self.is_class_body
+                    && assignment.value.is_none()
+                    && is_annotation_named(&assignment.annotation, "Final") => {}
             Stmt::AnnAssign(assignment) if !self.is_enum_body => {
                 if let Expr::Name(name) = assignment.target.as_ref() {
                     self.check_binding(name, Some(&assignment.annotation));
                 }
             }
-            Stmt::FunctionDef(_) => self.is_enum_body = false,
-            Stmt::ClassDef(class) => self.is_enum_body = is_enum_class(class),
+            Stmt::FunctionDef(_) => {
+                self.is_class_body = false;
+                self.is_enum_body = false;
+            }
+            Stmt::ClassDef(class) => {
+                self.is_class_body = true;
+                self.is_enum_body = is_enum_class(class);
+            }
             _ => {}
         }
         walk_stmt(self, statement);
+        self.is_class_body = previous_is_class_body;
         self.is_enum_body = previous_is_enum_body;
     }
 }

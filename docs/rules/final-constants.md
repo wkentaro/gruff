@@ -32,7 +32,9 @@ renamed binding too:
 
 Enum members, type aliases, chained and unpacking assignments, augmented
 assignments, loop and context-manager targets, attributes, subscripts, and
-imports are excluded. Gruff checks syntax without resolving import aliases or
+imports are excluded. So is a `Final` annotation with no value in a class body,
+such as `_device: Final[str | None]`: it declares an instance attribute that a
+method assigns, not a constant. Gruff checks syntax without resolving import aliases or
 dataflow.
 
 ## When to suppress
