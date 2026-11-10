@@ -11,3 +11,7 @@ The trial recorded on the issue found 74 store sites across 369 Python files at 
 Recognizable `ClassVar` and `InitVar` annotations, including quoted forms and direct import aliases, describe class state or constructor inputs and do not exempt instance stores. A locally recognized getter-only property takes precedence over an annotation. Frozen-class and `Final` enforcement belong to other tools. Unannotated descriptor assignments, framework factories, inherited declarations, and runtime rebinding are not inferred. Inherited contracts remain valid reasons for suppression; same-file bases receive no special treatment that would change when code moves between modules.
 
 Private storage remains appropriate for internal state; properties serve validation and read/write control. Dataclasses remain useful for generated initialization, but are not required to declare a data interface. This narrows an existing rule rather than introducing an independently adoptable scope expansion, so GR012 and its configuration remain stable. Any separate rule about classes mixing many fields and substantial behavior must receive a new code under ADR 0005.
+
+## Private instance data
+
+[Issue #121](https://github.com/wkentaro/gruff/issues/121) replaces the statement above that internal state only needs an underscore-prefixed name. That still holds for GR012, which checks public names only. GR015 now requires a class-body annotation for private instance data, so a type checker rejects a store of the wrong type. ADR 0023 records that decision.
