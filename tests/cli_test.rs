@@ -2434,6 +2434,9 @@ MULTILINE = (
 multiline: Final = (
     2,
 )  # noqa: GR004 -- framework state
+class Runtime:
+    DECLARED: int
+    assigned: Final = 8
 "#,
     )
     .expect("finding source should be written");
@@ -2477,6 +2480,12 @@ multiline: Final = (
             17,
             1,
             "Final binding multiline must be named in UPPER_SNAKE_CASE",
+        ),
+        (21, 5, "Constant DECLARED must be annotated Final"),
+        (
+            22,
+            5,
+            "Final binding assigned must be named in UPPER_SNAKE_CASE",
         ),
     ];
     assert_eq!(findings.as_array().unwrap().len(), expected.len());
@@ -2578,6 +2587,13 @@ _suppressed_multiline: Final = (  # noqa: GR004, GR011 -- framework state
 )
 def read_suppressed_multiline():
     return _suppressed_multiline
+class Runtime:
+    _device: Final[str | None]
+    if True:
+        retries: typing.Final[int]
+    def __init__(self, device):
+        self._device = device
+        self.retries = 3
 "#,
     )
     .expect("allowed source should be written");
