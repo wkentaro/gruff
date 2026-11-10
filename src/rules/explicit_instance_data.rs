@@ -8,6 +8,7 @@ use ruff_python_ast::visitor::Visitor;
 use ruff_python_ast::visitor::walk_expr;
 use ruff_python_ast::visitor::walk_stmt;
 use ruff_text_size::Ranged;
+use ruff_text_size::TextRange;
 
 use super::Diagnostic;
 
@@ -17,19 +18,53 @@ pub(crate) const SUMMARY: &str =
     "Public instance data is explicit through class-body annotations or properties.";
 
 pub(crate) fn check(_path: &Path, statements: &[Stmt]) -> Vec<Diagnostic> {
+    find_undeclared_stores(statements, |name| !name.starts_with('_'))
+        .into_iter()
+        .map(|store| Diagnostic {
+            message: if store.is_property {
+                format!(
+                    "Write to getter-only property `{}`; use private storage, or declare a setter for intentional public writes.",
+                    store.name
+                )
+            } else {
+                format!(
+                    "Instance data field `{}` is implicit; use private storage for internal state, or declare instance data or expose a property for public access.",
+                    store.name
+                )
+            },
+            range: store.range,
+            noqa_offset: None,
+        })
+        .collect()
+}
+
+pub(super) struct UndeclaredStore {
+    pub(super) name: String,
+    pub(super) range: TextRange,
+    // A getter-only property, which rejects the write even when declared.
+    pub(super) is_property: bool,
+}
+
+// GR012 passes public names and GR015 private ones, so no store is reported twice.
+pub(super) fn find_undeclared_stores(
+    statements: &[Stmt],
+    names: fn(&str) -> bool,
+) -> Vec<UndeclaredStore> {
     let mut non_instance_aliases = HashSet::new();
     collect_non_instance_aliases(statements, &mut non_instance_aliases);
     let mut visitor = ClassVisitor {
-        diagnostics: Vec::new(),
+        stores: Vec::new(),
         non_instance_aliases,
+        names,
     };
     visitor.visit_body(statements);
-    visitor.diagnostics
+    visitor.stores
 }
 
 struct ClassVisitor {
-    diagnostics: Vec<Diagnostic>,
+    stores: Vec<UndeclaredStore>,
     non_instance_aliases: HashSet<String>,
+    names: fn(&str) -> bool,
 }
 
 impl<'a> Visitor<'a> for ClassVisitor {
@@ -105,11 +140,12 @@ impl<'a> Visitor<'a> for ClassVisitor {
                 };
                 AttributeVisitor {
                     receiver: receiver.name().as_str(),
+                    names: self.names,
                     declared_fields: &declared_fields,
                     properties: &properties,
                     setters: &setters,
                     is_annotation_only: false,
-                    diagnostics: &mut self.diagnostics,
+                    stores: &mut self.stores,
                 }
                 .visit_body(&method.body);
             }
@@ -180,11 +216,12 @@ fn matches_builtin(expression: &Expr, expected: &str) -> bool {
 
 struct AttributeVisitor<'a, 'b> {
     receiver: &'a str,
+    names: fn(&str) -> bool,
     declared_fields: &'b HashSet<&'a str>,
     properties: &'b HashSet<&'a str>,
     setters: &'b HashSet<&'a str>,
     is_annotation_only: bool,
-    diagnostics: &'b mut Vec<Diagnostic>,
+    stores: &'b mut Vec<UndeclaredStore>,
 }
 
 impl<'a> Visitor<'a> for AttributeVisitor<'a, '_> {
@@ -207,27 +244,17 @@ impl<'a> Visitor<'a> for AttributeVisitor<'a, '_> {
         }
         if let Expr::Attribute(attribute) = expression
             && attribute.ctx == ExprContext::Store
-            && !attribute.attr.starts_with('_')
+            && (self.names)(attribute.attr.as_str())
             && matches!(attribute.value.as_ref(), Expr::Name(name) if name.id == self.receiver)
             && !self.setters.contains(attribute.attr.as_str())
             && (!self.declared_fields.contains(attribute.attr.as_str())
                 || self.properties.contains(attribute.attr.as_str()))
             && !(self.is_annotation_only && self.properties.contains(attribute.attr.as_str()))
         {
-            self.diagnostics.push(Diagnostic {
-                message: if self.properties.contains(attribute.attr.as_str()) {
-                    format!(
-                        "Write to getter-only property `{}`; use private storage, or declare a setter for intentional public writes.",
-                        attribute.attr
-                    )
-                } else {
-                    format!(
-                        "Instance data field `{}` is implicit; use private storage for internal state, or declare instance data or expose a property for public access.",
-                        attribute.attr
-                    )
-                },
+            self.stores.push(UndeclaredStore {
+                name: attribute.attr.to_string(),
                 range: attribute.attr.range(),
-                noqa_offset: None,
+                is_property: self.properties.contains(attribute.attr.as_str()),
             });
         }
         walk_expr(self, expression);
