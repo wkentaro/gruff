@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.2.4 - 2026-11-10
+
+### Added
+
+- Add GR015 `explicit-private-instance-data`, which flags a private attribute stored on a method's receiver without an annotation in the same class body. ([#122](https://github.com/wkentaro/gruff/pull/122))
+
 ## 0.2.3 - 2026-11-02
 
 ### Changed
