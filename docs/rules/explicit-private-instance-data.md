@@ -10,6 +10,10 @@ the same store.
 
 An annotation on `self._value` inside a method does not declare the field.
 
+Each field is reported once, at its first store in the class, so a
+suppression comment goes on that store. Each write to a getter-only
+property is reported, since each one fails.
+
 ## Why
 
 Without a declaration, a type checker infers the attribute's type from every

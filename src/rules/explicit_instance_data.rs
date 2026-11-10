@@ -119,6 +119,8 @@ impl<'a> Visitor<'a> for ClassVisitor {
                     }
                 }
             }
+            // One finding per field: the first store names it, and the rest repeat it.
+            let mut reported_fields = HashSet::new();
             for method in methods {
                 // These hooks receive a class even without a classmethod decorator.
                 if matches!(
@@ -145,6 +147,7 @@ impl<'a> Visitor<'a> for ClassVisitor {
                     properties: &properties,
                     setters: &setters,
                     is_annotation_only: false,
+                    reported_fields: &mut reported_fields,
                     stores: &mut self.stores,
                 }
                 .visit_body(&method.body);
@@ -221,6 +224,7 @@ struct AttributeVisitor<'a, 'b> {
     properties: &'b HashSet<&'a str>,
     setters: &'b HashSet<&'a str>,
     is_annotation_only: bool,
+    reported_fields: &'b mut HashSet<&'a str>,
     stores: &'b mut Vec<UndeclaredStore>,
 }
 
@@ -251,11 +255,15 @@ impl<'a> Visitor<'a> for AttributeVisitor<'a, '_> {
                 || self.properties.contains(attribute.attr.as_str()))
             && !(self.is_annotation_only && self.properties.contains(attribute.attr.as_str()))
         {
-            self.stores.push(UndeclaredStore {
-                name: attribute.attr.to_string(),
-                range: attribute.attr.range(),
-                is_property: self.properties.contains(attribute.attr.as_str()),
-            });
+            let is_property = self.properties.contains(attribute.attr.as_str());
+            // Each write to a getter-only property fails on its own, so each is reported.
+            if is_property || self.reported_fields.insert(attribute.attr.as_str()) {
+                self.stores.push(UndeclaredStore {
+                    name: attribute.attr.to_string(),
+                    range: attribute.attr.range(),
+                    is_property,
+                });
+            }
         }
         walk_expr(self, expression);
     }

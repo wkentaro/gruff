@@ -3416,6 +3416,11 @@ fn checks_explicit_instance_data_conformance_cases() {
             &["value"],
         ),
         (
+            "repeated_stores",
+            "class Result:\n    def __init__(self):\n        self.value = 0\n    def update(self):\n        self.value += 1\n        self.value = 2\n",
+            &["value"],
+        ),
+        (
             "assignment_forms",
             "class Result:\n    async def update(this, /):\n        if ready:\n            this.first = this.second = 1\n            this.third, *this.rest = values\n            this.count += 1\n        for this.item in items:\n            pass\n        with context() as this.resource:\n            pass\n",
             &[
@@ -3655,6 +3660,7 @@ fn checks_explicit_instance_data_conformance_cases() {
         assert_eq!(findings.len(), expected.len(), "{name}: {findings:?}");
         match *name {
             "read_only" => assert_eq!(findings[0]["location"]["row"], 7),
+            "repeated_stores" => assert_eq!(findings[0]["location"]["row"], 3),
             "nested_scopes" => assert_eq!(findings[0]["location"]["row"], 11),
             "implicit_class_methods" | "lambda_scope" => {
                 assert_eq!(findings[0]["location"]["row"], 3);
@@ -3694,7 +3700,12 @@ fn checks_explicit_private_instance_data_conformance_cases() {
         (
             "undeclared",
             "class Backend:\n    def __init__(self):\n        self._lock = Lock()\n        self._timeout: float = 1.0\n    def close(self):\n        self._closed: bool\n        self._closed = True\n",
-            &["_lock", "_timeout", "_closed", "_closed"],
+            &["_lock", "_timeout", "_closed"],
+        ),
+        (
+            "repeated_stores",
+            "class Backend:\n    @property\n    def _value(self):\n        return 1\n    def __init__(self):\n        self._count = 0\n        self._value = 1\n    def update(self):\n        self._count += 1\n        self._value = 2\nclass Other:\n    def update(self):\n        self._count = 1\n",
+            &["_count", "_value", "_value", "_count"],
         ),
         (
             "declared",
@@ -3776,7 +3787,7 @@ fn checks_explicit_private_instance_data_conformance_cases() {
             assert_eq!(finding["name"], "explicit-private-instance-data");
             assert_eq!(
                 finding["message"],
-                if *attribute == "_value" && *name == "properties" {
+                if *attribute == "_value" && matches!(*name, "properties" | "repeated_stores") {
                     format!(
                         "Write to getter-only property `{attribute}`; declare a setter for intentional writes."
                     )
