@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## 0.2.5 - 2026-11-10
+
+### Fixed
+
+- GR004 skips a `Final` annotation with no value in a class body, such as `_device: Final[str | None]`, which declares an instance attribute instead of a constant, so GR015's documented fix no longer trips GR004. ([#124](https://github.com/wkentaro/gruff/pull/124))
+- GR012 and GR015 report each undeclared field once, at its first store in the class, instead of at every store. Each write to a getter-only property is still reported. ([#125](https://github.com/wkentaro/gruff/pull/125))
+
 ## 0.2.4 - 2026-11-10
 
 ### Added
