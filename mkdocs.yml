@@ -56,3 +56,4 @@ nav:
       - rules/explicit-instance-data.md
       - rules/keyword-only-non-public-inputs.md
       - rules/no-non-public-imports.md
+      - rules/explicit-private-instance-data.md
