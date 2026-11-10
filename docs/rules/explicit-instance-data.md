@@ -9,6 +9,10 @@ underscore-prefixed names for internal state.
 An annotation on `self.value` inside a method does not declare a field. The rule
 also applies to classes whose names start with `_`.
 
+Each field is reported once, at its first store in the class, so a
+suppression comment goes on that store. Each write to a getter-only
+property is reported, since each one fails.
+
 ## Why
 
 A field created only inside a method leaves readers to search for the class's
